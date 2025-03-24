@@ -230,14 +230,34 @@ SELECT
     p.UNITPRICE,
     avg_prices.avgprice
 FROM products p
-JOIN (SELECT AVG(unitprice) AS avgprice FROM products) avg_prices 
+JOIN (SELECT AVG(UNITPRICE) AS avgprice FROM products) avg_prices 
 ON 1=1;
 ```
 
-## Wyniki MsSQL
+## Wyniki PostrgreSQL
 
+1) z funckją okna
+   - Czas wykonania 55ms
+   - ![alt text](image.png)
+2) z podzapytaniem
+	- Czas wykonanie 69ms
+	- ![alt text](image-1.png)
+3) z joinem 
+   - Czas wykonanie 52ms
+   - ![alt text](image-2.png)
 ---
 
+## Wyniki MsSQL
+
+1) z funkcją okna
+	- Czas wykonania 76ms
+	- ![alt text](image-3.png)
+2) z podzapytaniem
+    - Czas wykonania 72ms
+    - ![alt text](image-4.png)
+3) z joinem
+    - Czas wykonania 70ms
+    - ![alt text](image-5.png)
 
 # Zadanie 4
 
@@ -253,8 +273,62 @@ Przetestuj działanie w różnych SZBD (MS SQL Server, PostgreSql, SQLite)
 > Wyniki: 
 
 ```sql
---  ...
+-- z funkcją oken
+WITH PRODUCT_PRICES AS
+	(SELECT PRODUCTID
+		, PRODUCTNAME
+		, UNITPRICE
+		, AVG(UNITPRICE) OVER (PARTITION BY CATEGORYID) AS AVG_PRICE
+		, AVG(UNITPRICE) OVER () AS OVERALL_AVG
+	FROM dbo.PRODUCTS)
+SELECT * FROM PRODUCT_PRICES WHERE UNITPRICE > OVERALL_AVG;
+
+-- z podzapytaniem
+SELECT p.PRODUCTID
+	, p.PRODUCTNAME
+	, p.UNITPRICE
+	, (SELECT AVG(UNITPRICE) 
+		FROM dbo.PRODUCTS q 
+		WHERE q.CATEGORYID = p.CATEGORYID) AS AVG_PRICE
+FROM dbo.PRODUCTS p
+WHERE p.UNITPRICE > (SELECT AVG(UNITPRICE) 
+						FROM dbo.PRODUCTS);
+
+-- z joinem
+SELECT p.PRODUCTID
+	, p.PRODUCTNAME
+	, p.UNITPRICE
+	, q.AVG_PRICE
+FROM dbo.PRODUCTS p
+INNER JOIN (SELECT CATEGORYID, AVG(UNITPRICE) AS AVG_PRICE
+			FROM dbo.PRODUCTS
+			GROUP BY CATEGORYID) q
+	ON p.CATEGORYID = q.CATEGORYID
+WHERE p.UNITPRICE > (SELECT AVG(UNITPRICE) 
+						FROM dbo.PRODUCTS);
 ```
+## Wyniki PostgreSQL
+1) z funkcja okna
+	- Czas wykonania 42ms
+	- ![alt text](image-9.png)
+2) z podzapytaniem
+	- Czas wykonania 61ms
+	- ![alt text](image-10.png)
+3) z funkcja okna
+	- Czas wykonania 95ms
+	- ![alt text](image-8.png)
+
+
+## Wyniki MsSQL
+1) z funkcja okna
+	- Czas wykonania 90ms
+	- ![alt text](image-6.png)
+1) z podzapytaniem
+	- Czas wykonania 75ms
+	- ![alt text](image-7.png)
+2) z funkcja okna
+	- Czas wykonania 64ms
+	- ![alt text](image-11.png)
 
 ---
 

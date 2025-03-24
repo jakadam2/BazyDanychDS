@@ -3,8 +3,7 @@
 
 ---
 
-**Imiona i nazwiska:**
-
+**Imiona i nazwiska:** Adam  Woźny, [wez sie tu wpisz xd]
 --- 
 
 
@@ -115,9 +114,15 @@ select categoryid, avg(unitprice) avgprice
 from products p
 group by categoryid;
 
--- funkcja okna z jawnie podanym 
+-- funkcja okna z jawnie podanym kryterium kategoryzującym na poziomie ID kategorii
+-- zwraca tyle rekordów ile jest produktów, dla każdeggo produktu zwraca średnią cene produktów w tej kategorii co on jest
 select avg(unitprice) over (partition by categoryid) as avgprice
 from products p;
+
+-- Można zauważyć, że funkcje okna wykonują się szybciej od funkcji agregujących 
+-- Jest to intuicyjne, bo funkcje agregujące poza wyliczeniem wartości, muszą wykonać również obliczenia umożliwiające agregacje
+-- Jednak, z racji na bardzo krótkie czasy wykonania, cięzko stwierdzić to z całą pewnością
+-- oraz określić rząd o jakie funkcje okna są potencjalnie szybsze 
 ```
 
 
@@ -151,7 +156,28 @@ Jaka jest różnica? Czego dotyczy warunek w każdym z przypadków? Napisz polec
 > Wyniki: 
 
 ```sql
---  ...
+--  Różnica (poza śladową wydajnością) polega na tym, że w piewszym zapytaniu w wyniku dla każdego produktu z ID > 10 jest zwracana
+--  średnia cena WSZYSTKICH produktów w tej tabeli, a w drugim dla dla każdego produktu z ID > 10 jest zwracana produktów z ID > 10
+
+-- 1) z funkcją okna 
+SELECT * FROM 
+	(SELECT 
+        p.productid,
+        p.ProductName,
+        p.unitprice,
+        AVG(p.unitprice) OVER () AS avgprice
+    FROM products p
+) t
+WHERE t.productid < 10;
+-- where zawsze wykonuje sie przed nimi wiec trzeba dac takie cos
+
+-- 2) z podzapytaniem
+SELECT p.PRODUCTID
+	, p.PRODUCTNAME
+	, p.UNITPRICE
+	, (SELECT AVG(UNITPRICE) FROM PRODUCTS WHERE PRODUCTID < 10)
+FROM PRODUCTS p
+WHERE p.PRODUCTID < 10;
 ```
 
 ---
@@ -181,9 +207,34 @@ W DataGrip użyj opcji Explain Plan/Explain Analyze
 ---
 > Wyniki: 
 
+
 ```sql
---  ...
+-- z funkcją okna:
+SELECT PRODUCTID 
+	, PRODUCTNAME
+	, UNITPRICE
+	, AVG(UNITPRICE) OVER ()
+FROM dbo.PRODUCTS;
+
+-- z podzapytaniem
+SELECT PRODUCTID 
+	, PRODUCTNAME
+	, UNITPRICE
+	, (SELECT AVG(UNITPRICE) FROM dbo.PRODUCTS)
+FROM dbo.PRODUCTS;
+
+-- z joinem
+SELECT 
+    p.PRODUCTID,
+    p.PRODUCTNAME,
+    p.UNITPRICE,
+    avg_prices.avgprice
+FROM products p
+JOIN (SELECT AVG(unitprice) AS avgprice FROM products) avg_prices 
+ON 1=1;
 ```
+
+## Wyniki MsSQL
 
 ---
 

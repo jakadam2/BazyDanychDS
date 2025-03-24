@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:latest
+    shm_size: 1g
+    user: root
+    container_name: postgres_db
+    environment:
+      POSTGRES_PASSWORD: ${PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbs-data:/var/lib/postgresql/data  
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    shm_size: 1g
+    user: root
+    container_name: mssql_db
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: ${PASSWORD}
+    ports:
+      - "1433:1433"
+    volumes:
+      - "dbs-data:/var/opt/mssql"
+
+volumes:
+  dbs-data:

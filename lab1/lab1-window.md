@@ -3,7 +3,7 @@
 
 ---
 
-**Imiona i nazwiska:** Adam  Woźny, [wez sie tu wpisz xd]
+**Imiona i nazwiska:** Adam  Woźny, Damian Torbus
 --- 
 
 
@@ -237,7 +237,7 @@ ON 1=1;
 ## Wyniki PostrgreSQL
 
 1) z funckją okna
-   - Czas wykonania 55ms
+   - Czas wykonania 52ms
    - ![alt text](image.png)
 2) z podzapytaniem
 	- Czas wykonanie 69ms
@@ -258,6 +258,20 @@ ON 1=1;
 3) z joinem
     - Czas wykonania 70ms
     - ![alt text](image-5.png)
+---
+
+## Wyniki SQLite
+
+1) z funkcją okna
+	- Czas wykonania 3ms
+	- ![alt text](sqlite_3_1.png)
+2) z podzapytaniem
+    - Czas wykonania 4ms
+    - ![alt text](sqlite_3_2.png)
+3) z joinem
+    - Czas wykonania 3ms
+    - ![alt text](sqlite_3_3.png)
+---
 
 # Zadanie 4
 
@@ -329,6 +343,18 @@ WHERE p.UNITPRICE > (SELECT AVG(UNITPRICE)
 2) z funkcja okna
 	- Czas wykonania 64ms
 	- ![alt text](image-11.png)
+
+## Wyniki SQLite
+1) z funkcja okna
+	- Czas wykonania 6ms
+	- ![alt text](sqlite_4_1.png)
+1) z podzapytaniem
+	- Czas wykonania 6ms
+	- ![alt text](sqlite_4_2.png)
+2) z funkcja okna
+	- Czas wykonania 3ms
+	- ![alt text](sqlite_4_3.png)
+
 
 ---
 

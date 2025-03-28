@@ -328,9 +328,9 @@ WHERE p.UNITPRICE > (SELECT AVG(UNITPRICE)
 2) z podzapytaniem
 	- Czas wykonania 61ms
 	- ![alt text](image-10.png)
-3) z funkcja okna
+3) z joinem
 	- Czas wykonania 95ms
-	- ![alt text](image-8.png)
+	- ![alt text](image-11.png)
 
 
 ## Wyniki MsSQL
@@ -340,9 +340,9 @@ WHERE p.UNITPRICE > (SELECT AVG(UNITPRICE)
 1) z podzapytaniem
 	- Czas wykonania 75ms
 	- ![alt text](image-7.png)
-2) z funkcja okna
+2) z joinem
 	- Czas wykonania 64ms
-	- ![alt text](image-11.png)
+	- ![alt text](image-8.png)
 
 ## Wyniki SQLite
 1) z funkcja okna
@@ -351,9 +351,17 @@ WHERE p.UNITPRICE > (SELECT AVG(UNITPRICE)
 1) z podzapytaniem
 	- Czas wykonania 6ms
 	- ![alt text](sqlite_4_2.png)
-2) z funkcja okna
+2) z joinem
 	- Czas wykonania 3ms
 	- ![alt text](sqlite_4_3.png)
+
+
+# Wnioski 
+Z uwagi na bardzo niskie czasy wykonania, w pewnych przypadkach ciężko było wysnuć sensowne wnioski
+- na różnych silnikach baz danych różne typy zapytań są najszybsze
+- w 2/3 przypadkach zapytanie z użyciem joinów jest najbardziej efektywne
+- zapytanie z użyciem funkcji okna w każdym wypadku jest najbardziej czytelne i wygodne do napisania
+- funkcje okna zawsze wykonują się na danych po klauzurze _WHERE_
 
 
 ---

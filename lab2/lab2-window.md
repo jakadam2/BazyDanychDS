@@ -243,7 +243,27 @@ Napisz polecenie z wykorzystaniem podzapytania, join'a oraz funkcji okna. Porów
 
 Przetestuj działanie w różnych SZBD (MS SQL Server, PostgreSql, SQLite)
 
+## Wyniki PostgreSQL - wyniki limitowane do 500 
+1) z funckją okna
+   - Czas wykonania 3s
+   - ![alt text](image.png)
+2) z podzapytaniem
+   - Czas wykonanie 71s
+   - ![alt text](image-1.png)
+3) z joinem 
+   - Czas wykonanie 0.5s
+   - ![alt text](image-2.png)
 
+## Wyniki MsSQL 
+1) z funckją okna
+   - Czas wykonania 2.8s
+   - ![alt text](image-3.png)
+2) z podzapytaniem
+   - Czas wykonanie 6s
+   - ![alt text](image-5.png)
+3) z joinem 
+   - Czas wykonanie 2s
+   - ![alt text](image-4.png)
 
 ---
 > Wyniki: 
@@ -337,8 +357,18 @@ ON DATE_PART('Year', p.DATE) = y.YEAR;
 
 
 
-
 ```
+## Wyniki PostgreSQL - wyniki limitowane do 500 
+1) z funckją okna
+   - Czas wykonania 5.5s
+   - ![alt text](image-6.png)
+2) z podzapytaniem
+   - Czas wykonanie 71s
+   - ![alt text](image-1.png)
+3) z joinem 
+   - Czas wykonanie 1s
+   - ![alt text](image-7.png)
+
 
 ---
 

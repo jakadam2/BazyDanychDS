@@ -809,8 +809,93 @@ Wykonaj kilka "własnych" przykładowych analiz. Czy są jeszcze jakieś ciekawe
 > Wyniki: 
 
 ```sql
---  ...
+--  nieuzywana funkcja NTILE
+-- podajemy dodatkowo kwantyl
+WITH PRODUCT_PRICES AS
+	(SELECT ID
+		, PRODUCTID
+		, PRODUCTNAME
+		, CATEGORYID
+		, UNITPRICE
+		, NTILE(4) OVER (PARTITION BY CATEGORYID ORDER BY VALUE) AS AVG_PRICE
+	FROM Northwind3.PRODUCT_HISTORY)
+SELECT * FROM PRODUCT_PRICES;
+
+-- to samo co wyzej tylko bez okna
+
+SELECT 
+      ph.ID
+    , ph.PRODUCTID
+    , ph.PRODUCTNAME
+    , ph.CATEGORYID
+    , ph.UNITPRICE
+    FLOOR((((SELECT COUNT(*) 
+                FROM dbo.PRODUCT_HISTORY ph2
+              WHERE ph2.CATEGORYID = ph.CATEGORYID
+                  AND ph2.UNITPRICE < ph.UNITPRICE) * 4.0
+              ) / 
+              (SELECT COUNT(*) 
+               FROM dbo.PRODUCT_HISTORY ph3
+               WHERE ph3.CATEGORYID = ph.CATEGORYID)
+            ) ) + 1 AS AVG_PRICE
+FROM dbo.PRODUCT_HISTORY ph;
+
+
+-- czy efektywnie jest wybierać więcej niż jedną kolumne podzapytaniem a potem splitować ?
+SELECT ID
+  , p.PRODUCTID
+  , p.DATE
+  , p.PRODUCTNAME
+  , p.CATEGORYID
+  , p.UNITPRICE
+  , (SELECT AVG(UNITPRICE) WHERE CATEGORYID = p.CATEGORYID) AS AVG_CATEGORY
+  , (SELECT SUM(VALUE) WHERE CATEGORYID = p.CATEGORYID) AS SUM_CATEGORY
+  , (SELECT AVG(UNITPRICE) WHERE DATE_PART('Year', DATE) = DATE_PART('Year', p.DATE)) AS AVG_DATE
+  , (SELECT SUM(VALUE) WHERE DATE_PART('Year', DATE) = DATE_PART('Year', p.DATE)) AS SUM_DATE
+FROM Northwind3.PRODUCT_HISTORY p;
+-- vs
+WITH T AS
+   (SELECT ID
+   , p.PRODUCTID
+   , p.DATE
+   , p.PRODUCTNAME
+   , p.CATEGORYID
+   , p.UNITPRICE
+   , (SELECT AVG(UNITPRICE)|| '|' || SUM(VALUE) WHERE CATEGORYID = p.CATEGORYID) AS STATS_CATEGORY
+   , (SELECT AVG(UNITPRICE)|| '|' || SUM(VALUE) WHERE DATE_PART('Year', DATE) = DATE_PART('Year', p.DATE)) AS STATS_DATE
+   FROM Northwind3.PRODUCT_HISTORY p) 
+SELECT ID
+   , PRODUCTID
+   , DATE
+   , PRODUCTNAME
+   , CATEGORYID
+   , UNITPRICE
+   , SPLIT_PART(STATS_CATEGORY, '|', 1)
+   , SPLIT_PART(STATS_CATEGORY, '|', 2)
+   , SPLIT_PART(STATS_DATE, '|', 1)
+   , SPLIT_PART(STATS_DATE, '|', 2)
+FROM T;
+
 ```
+
+## Wyniki
+### 1
+#### Wyniki MsSQL  
+1) z funckją okna
+   - Czas wykonania 16.3s
+   - ![alt text](image-27.png)
+2) bez funkcji okna
+   - Czas wykonanie 12s [DLA 1000]
+   - ![alt text](image-25.png)
+
+#### Wyniki PostgreSQL  
+1) z funckją okna
+   - Czas wykonania 5,8s
+   - ![alt text](image-26.png)
+2) bez funkcji okna
+   - Czas wykonanie > 100s [DLA 1000]
+   - ![alt text](image-24.png)
+### 2 Niestety nie, liczyło się ponad 5razy dłużej i nie skończyło 
 
 ---
 Punktacja

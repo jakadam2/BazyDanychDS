@@ -402,16 +402,8 @@ from products;
 > Wyniki: 
 
 ```sql
--- funkcje okna
-select productid, productname, unitprice, categoryid,  
-    row_number() over(partition by categoryid order by unitprice desc) as rowno,  
-    rank() over(partition by categoryid order by unitprice desc) as rankprice,  
-    dense_rank() over(partition by categoryid order by unitprice desc) as denserankprice  
-from products;
+--  ...
 ```
-1) z funckją okna:
-   - Czas wykonania 4ms
-   - ![alt text](zad3_1.png)
 
 ---
 
@@ -423,33 +415,11 @@ Spróbuj uzyskać ten sam wynik bez użycia funkcji okna
 > Wyniki: 
 
 ```sql
-SELECT p1.PRODUCTID, p1.PRODUCTNAME, p1.UNITPRICE, p1.CATEGORYID,
-       COUNT(*) AS rowno,
-       (SELECT COUNT(*) + 1 
-        FROM products p2 
-        WHERE p2.CATEGORYID = p1.CATEGORYID AND p2.UNITPRICE > p1.UNITPRICE) AS rankprice,
-       (SELECT COUNT(DISTINCT p2.UNITPRICE) + 1 
-        FROM products p2 
-        WHERE p2.CATEGORYID = p1.CATEGORYID AND p2.UNITPRICE > p1.UNITPRICE) AS denserankprice
-FROM products p1
-GROUP BY p1.PRODUCTID, p1.PRODUCTNAME, p1.UNITPRICE, p1.CATEGORYID
-ORDER BY p1.CATEGORYID, p1.UNITPRICE DESC;
+--  ...
 ```
-2) bez funckji okna:
-   - Czas wykonania 4ms
-   - ![alt text](zad3_2.png)
+
 
 ---
-## Komentarz:
-W zapytaniu porównano trzy funkcje rankujące:
-1) ROW_NUMBER() – unikalna numeracja, nawet dla identycznych cen
-2) RANK() – te same ceny dostają ten sam numer, ale są "przeskoki"
-3) DENSE_RANK() – jak RANK(), ale bez przeskoków
-
-## Porównanie:
-1) Funkcje okna: prostsze, szybsze, bardziej czytelne
-2) Bez funkcji: działa, ale mniej wydajne i trudniejsze do modyfikacji
-
 # Zadanie 4
 
 Baza: Northwind, tabela product_history
@@ -564,16 +534,9 @@ order by date;
 > Wyniki: 
 
 ```sql
-SELECT productid, productname, categoryid, date, unitprice,
-       LAG(unitprice) OVER (PARTITION BY productid ORDER BY date) AS previousprodprice,
-       LEAD(unitprice) OVER (PARTITION BY productid ORDER BY date) AS nextprodprice
-FROM product_history
-WHERE productid = 1 AND strftime('%Y', date) = '2022'
-ORDER BY date;
+--  ...
 ```
-1) z funckją okna:
-   - Czas wykonania 397ms
-   - ![alt text](zad5_1.png)
+
 ---
 
 Zadanie
@@ -584,44 +547,11 @@ Spróbuj uzyskać ten sam wynik bez użycia funkcji okna, porównaj wyniki, czas
 > Wyniki: 
 
 ```sql
-SELECT 
-  p.productid,
-  p.productname,
-  p.categoryid,
-  p.date,
-  p.unitprice,
-  (
-    SELECT ph2.unitprice
-    FROM product_history ph2
-    WHERE ph2.productid = p.productid
-      AND ph2.date < p.date
-      AND strftime('%Y', ph2.date) = '2022'
-    ORDER BY ph2.date DESC
-    LIMIT 1
-  ) AS previousprodprice,
-  (
-    SELECT ph3.unitprice
-    FROM product_history ph3
-    WHERE ph3.productid = p.productid
-      AND ph3.date > p.date
-      AND strftime('%Y', ph3.date) = '2022'
-    ORDER BY ph3.date ASC
-    LIMIT 1
-  ) AS nextprodprice
-
-FROM product_history p
-WHERE p.productid = 1 AND strftime('%Y', p.date) = '2022'
-ORDER BY p.date;
+--  ...
 ```
----
-1) bez funkji okna:
-   - Czas wykonania 43,3s
-   - ![alt text](zad5_2.png)
-## Komentarz:
-1) Funkcja `LAG()` zwraca wartość z poprzedniego wiersza.
-2) Funkcja `LEAD()` z następnego — w określonym porządku, np. po dacie.
 
-Bez funkji okna czas wykonania jest znacznie dłuższy.
+---
+
 
 # Zadanie 6
 

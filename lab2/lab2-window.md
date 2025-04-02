@@ -369,6 +369,17 @@ ON DATE_PART('Year', p.DATE) = y.YEAR;
    - Czas wykonanie 1s
    - ![alt text](image-7.png)
 
+## Wyniki MsSQL - wyniki limitowane do 50tys
+1) z funckją okna
+   - Czas wykonania 1s
+   - ![alt text](image-9.png)
+2) z podzapytaniem
+   - Czas wykonanie 9.2s
+   - ![alt text](image-11.png)
+3) z joinem 
+   - Czas wykonanie 345ms
+   - ![alt text](image-10.png)
+
 
 ---
 
@@ -438,7 +449,27 @@ WITH A AS
 SELECT * FROM A 
 WHERE R < 5;
 
-?????
+SELECT ID
+  , PRODUCTNAME
+  , UNITPRICE
+  , YEAR
+  , RANKING
+FROM (
+  SELECT DATE_PART('Year', ph.DATE) AS YEAR
+    , ph.ID,
+    , ph.PRODUCTNAME,
+    , ph.UNITPRICE,
+    (
+      SELECT COUNT(DISTINCT ph2.UNITPRICE)
+      FROM Northwind3.PRODUCT_HISTORY ph2
+      	WHERE ph2.ID = ph.ID
+        AND DATE_PART('Year', ph2.DATE) = DATE_PART('Year', ph.DATE)
+        AND ph2.UNITPRICE > ph.UNITPRICE
+    ) + 1 AS RANKING
+  FROM Northwind3.PRODUCT_HISTORY ph
+) AS ranked
+WHERE RANKING <= 4
+ORDER BY YEAR, ID, RANKING;
 ```
 
 ---
@@ -452,6 +483,21 @@ Spróbuj uzyskać ten sam wynik bez użycia funkcji okna, porównaj wyniki, czas
 ```sql
 --  ...
 ```
+## Wyniki PostgreSQL  
+1) z funckją okna
+   - Czas wykonania 2.1s
+   - ![alt text](image-13.png)
+2) bez funkcji okna
+   - Czas wykonanie 9.5s
+   - ![alt text](image-12.png)
+
+## Wyniki MsSQL  
+1) z funckją okna
+   - Czas wykonania 11.2s
+   - ![alt text](image-14.png)
+2) bez funkcji okna
+   - Czas wykonanie 13.8s
+   - ![alt text](image-15.png)
 
 ---
 

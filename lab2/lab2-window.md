@@ -430,9 +430,17 @@ select productid, productname, unitprice, categoryid,
     dense_rank() over(partition by categoryid order by unitprice desc) as denserankprice  
 from products;
 ```
-1) z funckją okna:
+1) z funckją okna SQLLite:
    - Czas wykonania 4ms
    - ![alt text](zad3_1.png)
+
+2) z funckją okna MsSQL:
+   - Czas wykonania 55ms
+   - ![alt text](image-33.png)
+
+3) z funckją okna PostgreSQL:
+   - Czas wykonania 63ms
+   - ![alt text](image-32.png)
 
 ---
 
@@ -456,9 +464,16 @@ FROM products p1
 GROUP BY p1.PRODUCTID, p1.PRODUCTNAME, p1.UNITPRICE, p1.CATEGORYID
 ORDER BY p1.CATEGORYID, p1.UNITPRICE DESC;
 ```
-2) bez funckji okna:
+2) bez funckji okna SQLLite:
    - Czas wykonania 4ms
    - ![alt text](zad3_2.png)
+2) bez funckji okna MsSQL:
+   - Czas wykonania 74ms
+   - ![alt text](image-34.png)
+2) bez funckji okna PostgreSQL:
+   - Czas wykonania 4ms
+   - ![alt text](image-35.png)
+
 
 ---
 ## Komentarz:
@@ -604,9 +619,15 @@ FROM product_history
 WHERE productid = 1 AND strftime('%Y', date) = '2022'
 ORDER BY date;
 ```
-1) z funckją okna:
+1) z funckją okna SQLLite:
    - Czas wykonania 397ms
    - ![alt text](zad5_1.png)
+2) z funckją okna MsSQL:
+   - Czas wykonania 576ms
+   - ![alt text](image-28.png)
+3) z funckją okna PostgreSQL:
+   - Czas wykonania 608ms
+   - ![alt text](image-29.png)
 ---
 
 Zadanie
@@ -647,9 +668,17 @@ WHERE p.productid = 1 AND strftime('%Y', p.date) = '2022'
 ORDER BY p.date;
 ```
 ---
-1) bez funkji okna:
+1) bez funkji okna SQLLite:
    - Czas wykonania 43,3s
    - ![alt text](zad5_2.png)
+
+2) bez funkji okna MsSQL:
+   - Czas wykonania 0,7s
+   - ![alt text](image-31.png)
+
+3) bez funkji okna PostgreSQL:
+   - Czas wykonania 1,2s
+   - ![alt text](image-30.png)
 ## Komentarz:
 1) Funkcja `LAG()` zwraca wartość z poprzedniego wiersza.
 2) Funkcja `LEAD()` z następnego — w określonym porządku, np. po dacie.
@@ -685,10 +714,12 @@ INNER JOIN Northwind3.ORDERDETAILS od
 ON o.ORDERID = od.ORDERID
 INNER JOIN NOrthwind3.CUSTOMERS c
 ON c.CUSTOMERID = o.CUSTOMERID
-WINDOW win as (PARTITION BY o.CUSTOMERID);
+WINDOW win as (PARTITION BY o.CUSTOMERID ORDER BY DATE);
 
 ```
-
+## Komentarz:
+- funkcja okna LAG zwraca dane dotyczące poprzedniego rekordu (albo NULL jesli on nie istnieje) wedlug danego sortowania. Ważne jest zeby pamietac o rozmiarze domyslnego okna
+- wyżej wymieniona funkcja znacząco poprawia łatwość implementacji oraz efektywnośc samego zapytania
 ---
 
 
@@ -709,6 +740,7 @@ order by unitprice desc) last
 from products  
 order by categoryid, unitprice desc;
 
+-- bez funkcji okna
 SELECT 
     p.productid,
     p.productname,
@@ -732,9 +764,8 @@ ORDER BY p.categoryid, p.unitprice DESC;
 > Wyniki: 
 
 W zwróconym wyniku dla każdego rekordu zwracana jest najwieksza cena w danej kategorii, ale nie najmniejsza, ponieważ jak jest używana klauzula _ORDER BY_ to domyślny zakres okna jest od pierwszego rekordu do tego w którym jest rekord którego dotyczy, tak więc jak posortujumy rosnąco to ta największa wartość znajdzie się w każdym oknie, ale najmniejsza już niekoniecznie (albo prawie na pewno nie jeśli nie mówimy o najtanszym produkcie z kategorii). Podsumowując dane zapytanie zwraca zawsze najdrozszy produkt w danej kategorii i zwykle siebie jako najtanszy (zwykle, bo moze być kilka o tej samej cenie)
-```sql
---  ...
-```
+## Komentarz
+Na podstawie pomiarów możemy stwierdzić, że w tym przypadku funkcje okna są porównywalnia efektywne z innymi rozwiązaniami. Jednakże zapytanie jest dużo łatwiejsze do napisania oraz czytania 
 ## Wyniki MsSQL  
 1) z funckją okna
    - Czas wykonania 61ms
@@ -832,7 +863,8 @@ WIN_MONTH_ASC AS (PARTITION BY CUSTOMERID
    - 531ms
    - ![alt text](zad8.png)
 ---
-
+## Komentarz
+- przy odpowiednik ustawieniu okna wraz z sortowaniem funkcje first i last value pozwalają na znalezienie największego i najmniejszego elementu w danej kategorii
 
 # Zadanie 9
 
@@ -912,14 +944,19 @@ Spróbuj wykonać zadanie bez użycia funkcji okna. Spróbuj uzyskać ten sam wy
    - Czas wykonanie 20s [DLA 2000]
    - ![alt text](image-24.png)
 
-## Wyniki SQLite 
-1) z funckją okna
+## Wyniki SQLite
+1) z funkcją okna
    - Czas wykonania 34,37s
    - ![alt text](zad9_1.png)
 2) bez funkcji okna
    - Czas wykonanie ponad 15min (zbyt długi czas oczekiwania)
    - ![alt text](zad9_2.png)
+
+## Komentarz
+- w tym zastosowaniu funkcje okna zdeklasowały resztę rozwiązań pod względem czytelności i efektywności
+
 ---
+
 
 
 # Zadanie 10
@@ -1018,6 +1055,11 @@ FROM T;
    - ![alt text](image-24.png)
 ### 2 Niestety nie, liczyło się ponad 5razy dłużej i nie skończyło 
 
+# Wnioski z całego labolatorium
+_Poszczególne wnioski z zadan są zamieszczone bezposrednio pod nimi_
+
+- wykorzystywanie funkcji okna jest bardzo wygodne oraz czytelne
+- w większości wypadków również pod względem efektywności są porównywalne bądź lepsze
 ---
 Punktacja
 

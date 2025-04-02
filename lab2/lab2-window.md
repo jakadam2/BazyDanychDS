@@ -449,6 +449,7 @@ WITH A AS
 SELECT * FROM A 
 WHERE R < 5;
 
+-- bez okna
 SELECT ID
   , PRODUCTNAME
   , UNITPRICE
@@ -605,15 +606,48 @@ order by unitprice desc) first,
 order by unitprice desc) last  
 from products  
 order by categoryid, unitprice desc;
+
+SELECT 
+    p.productid,
+    p.productname,
+    p.unitprice,
+    p.categoryid,
+    (SELECT p2.productname 
+     FROM Northwind3.products p2 
+     WHERE p2.categoryid = p.categoryid 
+     ORDER BY p2.unitprice DESC
+     LIMIT 1) AS first,
+    (SELECT p2.productname 
+     FROM Northwind3.products p2 
+     WHERE p2.categoryid = p.categoryid 
+     ORDER BY p2.unitprice ASC
+     LIMIT 1) AS last
+FROM Northwind3.products p
+ORDER BY p.categoryid, p.unitprice DESC;
 ```
 
 ---
 > Wyniki: 
 
+W zwróconym wyniku dla każdego rekordu zwracana jest najwieksza cena w danej kategorii, ale nie najmniejsza, ponieważ jak jest używana klauzula _ORDER BY_ to domyślny zakres okna jest od pierwszego rekordu do tego w którym jest rekord którego dotyczy, tak więc jak posortujumy rosnąco to ta największa wartość znajdzie się w każdym oknie, ale najmniejsza już niekoniecznie (albo prawie na pewno nie jeśli nie mówimy o najtanszym produkcie z kategorii). Podsumowując dane zapytanie zwraca zawsze najdrozszy produkt w danej kategorii i zwykle siebie jako najtanszy (zwykle, bo moze być kilka o tej samej cenie)
 ```sql
 --  ...
 ```
+## Wyniki MsSQL  
+1) z funckją okna
+   - Czas wykonania 61ms
+   - ![alt text](image-16.png)
+2) bez funkcji okna
+   - Czas wykonanie 78ms
+   - ![alt text](image-19.png)
 
+## Wyniki PostgreSQL  
+1) z funckją okna
+   - Czas wykonania 111ms
+   - ![alt text](image-17.png)
+2) bez funkcji okna
+   - Czas wykonanie 68ms
+   - ![alt text](image-18.png)
 ---
 
 Zadanie
@@ -624,7 +658,7 @@ Spróbuj uzyskać ten sam wynik bez użycia funkcji okna, porównaj wyniki, czas
 > Wyniki: 
 
 ```sql
---  ...
+
 ```
 
 ---
@@ -654,9 +688,36 @@ Zbiór wynikowy powinien zawierać:
 > Wyniki: 
 
 ```sql
---  ...
+SELECT CUSTOMERID
+      , o.ORDERID
+      , ORDERDATE
+      , FREIGHT + (UNITPRICE * QUANTITY * (1 - DISCOUNT)) AS TOTAL_COST
+      , FIRST_VALUE(o.ORDERID) OVER WIN_MONTH_ASC AS MIN_ID
+      , FIRST_VALUE(ORDERDATE) OVER WIN_MONTH_ASC AS MIN_DATE
+      , FIRST_VALUE(FREIGHT + (UNITPRICE * QUANTITY * (1 - DISCOUNT))) OVER WIN_MONTH_ASC AS MIN_VALUE
+      , FIRST_VALUE(o.ORDERID) OVER WIN_MONTH_DESC AS MAX_ID
+      , FIRST_VALUE(ORDERDATE) OVER WIN_MONTH_DESC AS MAX_DATE
+      , FIRST_VALUE(FREIGHT + (UNITPRICE * QUANTITY * (1 - DISCOUNT))) OVER WIN_MONTH_DESC AS MAX_VALUE
+FROM Northwind3.ORDERDETAILS od
+INNER JOIN Northwind3.ORDERS o
+   ON o.ORDERID = od.ORDERID
+WINDOW 
+WIN_MONTH_ASC AS (PARTITION BY CUSTOMERID
+                             , DATE_PART('year', ORDERDATE)
+                             , DATE_PART('month', ORDERDATE) 
+                  ORDER BY FREIGHT + (UNITPRICE * QUANTITY * (1 - DISCOUNT)) ASC)
+, WIN_MONTH_DESC AS (PARTITION BY CUSTOMERID
+                             , DATE_PART('year', ORDERDATE)
+                             , DATE_PART('month', ORDERDATE) 
+                  ORDER BY FREIGHT + (UNITPRICE * QUANTITY * (1 - DISCOUNT)) DESC);
 ```
-
+## Wyniki 
+1. PostgreSQL:
+   - 87ms
+   - ![alt text](image-20.png)
+2. MsSQL
+   - 110ms
+   - ![alt text](image-21.png)
 ---
 
 
@@ -676,7 +737,42 @@ Zbiór wynikowy powinien zawierać:
 W przypadku długiego czasu wykonania ogranicz zbiór wynikowy do kilkuset/kilku tysięcy wierszy
 
 ```sql
--- wyniki ...
+SELECT ID
+   , PRODUCTID
+   , DATE
+   , SUM(VALUE) OVER (PARTITION BY PRODUCTID, DATE) AS PRODUCT_DATE_VALUE
+   , SUM(VALUE) OVER (PARTITION BY PRODUCTID
+                              , DATE_PART('year', DATE)
+                              , DATE_PART('month', DATE)
+                     ORDER BY DATE ASC)
+FROM Northwind3.PRODUCT_HISTORY ORDER BY PRODUCTID, DATE;
+
+-- bez okna
+WITH DAILY AS (
+    SELECT
+          PRODUCTID
+        , DATE
+        , SUM(VALUE) AS PRODUCT_DATE_VALUE
+    FROM Northwind3.PRODUCT_HISTORY
+    GROUP BY PRODUCTID, DATE
+)
+SELECT
+      ph.ID
+    , ph.PRODUCTID
+    , ph.DATE
+    , dps.PRODUCT_DATE_VALUE,
+    (   
+        SELECT SUM(ph_inner.VALUE)
+        FROM Northwind3.PRODUCT_HISTORY ph_inner
+        WHERE ph_inner.PRODUCTID = ph.PRODUCTID 
+          AND DATE_PART('year', ph_inner.DATE) = DATE_PART('year', ph.DATE)
+          AND DATE_PART('month', ph_inner.DATE) = DATE_PART('month', ph.DATE)
+          AND ph_inner.DATE <= ph.DATE
+    ) AS monthly_cumulative_value 
+FROM Northwind3.PRODUCT_HISTORY ph
+INNER JOIN DAILY dps 
+	ON ph.PRODUCTID = dps.PRODUCTID AND ph.DATE = dps.DATE
+ORDER BY ph.PRODUCTID, ph.DATE;
 ```
 
 Spróbuj wykonać zadanie bez użycia funkcji okna. Spróbuj uzyskać ten sam wynik bez użycia funkcji okna, porównaj wyniki, czasy i plany zapytań. Przetestuj działanie w różnych SZBD (MS SQL Server, PostgreSql, SQLite)
@@ -687,7 +783,21 @@ Spróbuj wykonać zadanie bez użycia funkcji okna. Spróbuj uzyskać ten sam wy
 ```sql
 --  ...
 ```
+## Wyniki MsSQL  
+1) z funckją okna
+   - Czas wykonania 11,8s
+   - ![alt text](image-23.png)
+2) bez funkcji okna
+   - Czas wykonanie 6,7 [DLA 2000]
+   - ![alt text](image-25.png)
 
+## Wyniki PostgreSQL  
+1) z funckją okna
+   - Czas wykonania 5,8s
+   - ![alt text](image-22.png)
+2) bez funkcji okna
+   - Czas wykonanie 20s [DLA 2000]
+   - ![alt text](image-24.png)
 ---
 
 

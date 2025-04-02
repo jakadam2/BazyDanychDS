@@ -265,15 +265,22 @@ Przetestuj działanie w różnych SZBD (MS SQL Server, PostgreSql, SQLite)
    - Czas wykonanie 2s
    - ![alt text](image-4.png)
 
+## Wyniki SQlite 
+1) z funckją okna
+   - Czas wykonania 16,9s
+   - ![alt text](zad1_1.png)
+2) z podzapytaniem
+   - Czas wykonanie ponad 15min (zbyt długi czas oczekiwania)
+   - ![alt text](zad1_2.png)
+3) z joinem 
+   - Czas wykonanie 6,59s
+   - ![alt text](zad1_3.png)
+
 ---
-> Wyniki: 
-
-```sql
-
-```
-
----
-
+## Wnioski:
+Funkcje okna umożliwiają obliczenie średniej w ramach kategorii w sposób prosty i czytelny.
+Wydajnościowo najlepsze okazało się rozwiązanie z użyciem JOIN. 
+Podzapytania były najwolniejsze i najmniej czytelne.
 
 # Zadanie 2
 
@@ -380,9 +387,23 @@ ON DATE_PART('Year', p.DATE) = y.YEAR;
    - Czas wykonanie 345ms
    - ![alt text](image-10.png)
 
+## Wyniki SQlite 
+1) z funckją okna
+   - Czas wykonania 33,5s
+   - ![alt text](zad2_1.png)
+2) z podzapytaniem
+   - Czas wykonanie 8min 19s
+   - ![alt text](zad2_2.png)
+3) z joinem 
+   - Czas wykonanie 2min 41s
+   - ![alt text](zad2_3.png)
+
 
 ---
-
+## Wnioski:
+To zadanie pokazuje moc funkcji okna przy analizie złożonych agregatów (średnia, suma) po różnych wymiarach.
+Zastosowanie WINDOW znacznie skraca kod.
+Wydajnościowo: JOIN działał najszybciej, funkcje okna — szybko i wygodnie, a podzapytania znowu były najwolniejsze.
 
 # Zadanie 3 
 
@@ -530,8 +551,19 @@ Spróbuj uzyskać ten sam wynik bez użycia funkcji okna, porównaj wyniki, czas
    - Czas wykonanie 13.8s
    - ![alt text](image-15.png)
 
----
+## Wyniki SQLite
+1) z funckją okna
+   - Czas wykonania 14,86s
+   - ![alt text](zad4_1.png)
+2) bez funkcji okna
+   - Czas wykonanie ponad 15min (zbyt długi czas oczekiwania)
+   - ![alt text](zad4_2.png)
 
+---
+## Wnioski:
+Funkcja RANK() w połączeniu z PARTITION BY pozwala łatwo wybrać top-N rekordów w danej grupie (tu: ceny w danym roku).
+Bez funkcji okna zapytanie działa poprawnie, ale jest dużo bardziej złożone i mniej wydajne.
+W obu przypadkach wyniki są zgodne, ale czas wykonania wyraźnie lepszy przy zastosowaniu funkcji okna.
 
 # Zadanie 5 
 
@@ -718,6 +750,14 @@ W zwróconym wyniku dla każdego rekordu zwracana jest najwieksza cena w danej k
 2) bez funkcji okna
    - Czas wykonanie 68ms
    - ![alt text](image-18.png)
+   - 
+- ## Wyniki SQLite
+1) z funckją okna
+   - Czas wykonania 7ms
+   - ![alt text](zad7_1.png)
+2) bez funkcji okna
+   - Czas wykonanie 14ms
+   - ![alt text](zad7_2.png)
 ---
 
 Zadanie
@@ -788,6 +828,9 @@ WIN_MONTH_ASC AS (PARTITION BY CUSTOMERID
 2. MsSQL
    - 110ms
    - ![alt text](image-21.png)
+3. SQLite:
+   - 531ms
+   - ![alt text](zad8.png)
 ---
 
 
@@ -868,6 +911,14 @@ Spróbuj wykonać zadanie bez użycia funkcji okna. Spróbuj uzyskać ten sam wy
 2) bez funkcji okna
    - Czas wykonanie 20s [DLA 2000]
    - ![alt text](image-24.png)
+
+## Wyniki SQLite 
+1) z funckją okna
+   - Czas wykonania 34,37s
+   - ![alt text](zad9_1.png)
+2) bez funkcji okna
+   - Czas wykonanie ponad 15min (zbyt długi czas oczekiwania)
+   - ![alt text](zad9_2.png)
 ---
 
 

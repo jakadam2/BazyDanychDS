@@ -16,7 +16,7 @@
 
 ---
 
-**Imiona i nazwiska:**
+**Imiona i nazwiska:** Damian Torbus, Adam Woźny
 
 --- 
 
@@ -208,12 +208,31 @@ Zaznacz wszystkie zapytania, i uruchom je w **Database Engine Tuning Advisor**:
 Sprawdź zakładkę **Tuning Options**, co tam można skonfigurować?
 
 ---
-> Wyniki: 
+![alt text](image-11.png)
+![alt text](image-12.png)
 
-```sql
---  ...
-```
+W zakładce **Tuning Options** jest możliwość skonfigurowania 
 
+- limitu czasu tunowania - jak długo maksymalnie może potrwac proces ulepszania i rekomendacji 
+- obiekty, które są rozważane do utworzenia 
+  - indeksy i widoki indeksowane,
+  - indeksy (klastrowe i nieklastrowe)
+  - indeksy nieklastrowe
+  - widoki indeksowane (nie ma bezpośrednich zmian w tabelach)
+  - ewaluacja (nic nie zmiania, tylko patrzy jak dobrze wykorzystywane są już instniejące)
+- obiekty, które są nie rozważane do zmiany
+  - brak ograniczen
+  - brak modyfikacji
+  - ograniczenie tylko do indeksów klastrowych  
+- podejście do partycjonowania
+  - brak zmian 
+  - pełne przeprojektowania
+  - przeprojketowanie z jak najmniejszym wkładem w to
+- opcje zaawansowane 
+  - maksymalna ilosc kolumn w indeksie
+  - maksymalna ilość nowych struktów
+
+Dla naszzego przypadku (labaratorium z indeksów) została wybrana opcja żeby rozważyć stworzenie nowych indeksów, nie zostały nałożone żadne ograniczenia co do modyfikowania istniejących struktur (bo aktualnie żadne nie istnieją) oraz opcja `no partitioning`, ponieważ partycjonowania nie jest bezpośrednim tematem tego labaratorium. 
 ---
 
 
@@ -228,6 +247,16 @@ Zaobserwuj wyniki w **Recommendations**.
 
 Przejdź do zakładki **Reports**. Sprawdź poszczególne raporty. Główną uwagę zwróć na koszty i ich poprawę:
 
+### Wynikowe rekomendacje:
+![alt text](image-13.png)
+![alt text](image-16.png)
+
+### Raporty
+![alt text](image-14.png)
+![alt text](image-15.png)
+
+
+
 
 <!-- ![[_img/index4-1.png | 500]] -->
 
@@ -240,12 +269,11 @@ Uruchom zapisany skrypt w Management Studio.
 
 Opisz, dlaczego dane indeksy zostały zaproponowane do zapytań:
 
----
-> Wyniki: 
+Zostało zaproponowane, aby stworzyć 7 indeksów nieklastrowych. Wygląda na to, że każdy z indeksów został stworzony specjalnie z myślą o konkretnym zapytaniu. Dla każdej konfiguracji zwracanych kolumn oraz kolumn do filtrowania, agregacji, joinów został stworzony osobny indeks. Możemy zoobserwować duży rozmiar indeksów spowodowanych użyciem `select * ...` ponieważ powoduje to stworzeniem indeksu zawierającego wszytskie kolumny. Indeksy zwykle są robione według szablony (`_wszystkie kolumny do filtrowania, agregacji, joinów_`) include (`_wszystkie zwracane kolumny_`)
 
-```sql
---  ...
-```
+Można zauważyć, że następują kosmiczne wręcz zmniejszenie kosztów zapytań. Dzieje się tak, ponieważ dzięki zastosowaniu indeksów nie ma potrzeby wykonywania bardzo drogich operacji `scan` (które skanują każdą stronę) tylko można je zastąpić operacjami `seek` (które skanują tylko wybrane strony).
+---
+
 
 ---
 
@@ -255,9 +283,36 @@ Sprawdź jak zmieniły się Execution Plany. Opisz zmiany:
 ---
 > Wyniki: 
 [[lab2-index-opt]]
-```sql
---  ...
-```
+
+### Zapytanie 1
+![alt text](image-17.png)
+![alt text](image-18.png)
+
+Można zauważyć zmianę operacji `scan` na `seek`, oznacza to, że nie są przeszukiwane wszystkie strony tabeli. Z tego powodu nastąpiła znaczna poprawa liczby przeczytanych stron z 785 do tylko 3. Jako, że nie istnieje rekord o podanych warunkach również nastąpił odczyt z tylko jednej tabeli.
+
+### Zapytanie 1.1
+![alt text](image-19.png)
+![alt text](image-20.png)
+
+Tutaj również nastąpiła zmiana oparacji z `scan` na `seek`, ale jako, że już takie rekordy istnieją to nastąpił tez odczyt z drugiej tabeli w której w prawdzie nastąpiło zmniejszenie liczby odczytanych stron, ale już nie takie spektakularne (z 1499 na 476)
+
+### Zapytanie 2
+![alt text](image-21.png)
+![alt text](image-22.png)
+
+Po dodaniu indeksów  widoczna jest zmiana oparacji z `scan` na `seek`, co znacząco ograniczyło koszt zapytania. Dzięki temu operacja Group By miała mniej danych do przetworzenia – liczba logicznych odczytów spadła z 2284 (785 + 1499) do zaledwie kilkudziesięciu. Koszt agregacji również się zmniejszył, ponieważ dane były już częściowo posortowane i zoptymalizowane pod kątem wykonania przez silnik SQL Server.
+
+### Zapytanie 3
+![alt text](image-23.png)
+![alt text](image-24.png)
+
+Podobnie jak w poprzednich przypadkach, operacja scan została zamieniona na seek dzięki indeksowi na kolumnie orderdate. Pomimo braku wyników odpowiadających warunkowi WHERE, SQL Server przeszukał tylko odpowiednie strony danych, co ograniczyło zużycie zasobów. Liczba odczytów w tabeli salesorderheader spadła z kilkuset do kilku, natomiast z racji braku pasujących rekordów nie nastąpił odczyt z tabeli salesorderdetail.
+
+### Zapytanie 4
+![alt text](image-25.png)
+![alt text](image-26.png)
+
+W wyniku utworzenia indeksu nieklastrowego na kolumnie carriertrackingnumber, zapytanie przeszło z pełnego scan na wydajny seek. Dodatkowo, ponieważ ORDER BY salesorderid odpowiada naturalnemu porządkowi indeksu klastrowego (jeśli salesorderid to klucz klastra), operacja sortowania była tańsza lub wręcz pominięta. Liczba odczytanych stron w obu tabelach znacznie się zmniejszyła (z 785 i 1499 do kilkudziesięciu lub mniej), co wpłynęło na bardzo zauważalne przyspieszenie działania tego zapytania
 
 ---
 

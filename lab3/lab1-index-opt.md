@@ -458,9 +458,20 @@ Aby wymusić użycie indeksu użyj `WITH(INDEX(Address_PostalCode_1))` po `FROM`
 
 > Wyniki: 
 
-```sql
---  ...
-```
+### Bez indeksu 
+![alt text](image-39.png)
+![alt text](image-40.png)
+![alt text](image-41.png)
+
+### Z address_postalcode_1
+![alt text](image-42.png)
+![alt text](image-43.png)
+![alt text](image-44.png)
+
+### Z address_postalcode_2
+![alt text](image-45.png)
+![alt text](image-46.png)
+![alt text](image-47.png)
 
 Sprawdź rozmiar Indeksów:
 
@@ -479,9 +490,7 @@ Który jest większy? Jak można skomentować te dwa podejścia do indeksowania?
 
 > Wyniki: 
 
-```sql
---  ...
-```
+![alt text](image-48.png)
 
 
 # Zadanie 5 – Indeksy z filtrami
@@ -522,18 +531,18 @@ Czy indeks został użyty? Dlaczego?
 
 > Wyniki: 
 
-```sql
---  ...
-```
+### bez wymuszenia
+![alt text](image-49.png)
+![alt text](image-50.png)
+![alt text](image-51.png)
 
 Spróbuj wymusić indeks. Co się stało, dlaczego takie zachowanie?
 
 > Wyniki: 
-
-```sql
---  ...
-```
-
+### z wymuszeniem
+![alt text](image-52.png)
+![alt text](image-53.png)
+![alt text](image-54.png)
 
 
 

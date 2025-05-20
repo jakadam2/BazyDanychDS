@@ -1,0 +1,2 @@
+set statistics io on;
+set statistics time on;select * into customer from adventureworks.sales.customer;select * from customer where storeid = 594;select * from customer where storeid between 594 and 610;create  index customer_store_cls_idx on customer(storeid);select * from customer where storeid = 594;select * from customer where storeid between 594 and 610;create clustered index customer_store_cls_idx_clustered on customer(storeid);select * from customer where storeid = 594;select * from customer where storeid between 594 and 610;	

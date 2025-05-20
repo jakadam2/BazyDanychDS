@@ -349,10 +349,19 @@ Zanotuj czas zapytania oraz jego koszt koszt:
 
 ---
 > Wyniki: 
+Każde z zapytań wybiera wartość wszystkich kolumn z pewnymi warunkami dla wierszy, które są różne dla zapytania.
 
-```sql
---  ...
-```
+### Zapytanie 1
+![alt text](image-27.png)
+![alt text](image-28.png)
+
+Zapytanie zostało zrealizowane poprzez kosztowną operacje `scan`, ponieważ gdy nie ma indeksu, żeby zastosować warunek z klauzuli `WHERE` trzeba przejrzeć każdy rekord. Został zwrócony 1 rekord z 8 kolumnami. Czas trwania wynosił 2ms, a jego koszt 0,1391581. Zostało wykonane 155 logicznych odczytów.
+
+### Zapytanie 2
+![alt text](image-29.png)
+![alt text](image-30.png)
+
+Zapytanie zostało tak samo jak poprzednie zrealizowane przez kosztowną operacje `scan`, z tych samych powodów, również aby zebrać wszytskie rekordy spełniające klauzulę `WHERE` trzeba je wszytskie przeczytać. Czas rownież wynosił 2ms, koszt 0,1391581. Również zostało wykonane 155 logicznych odczytów.
 
 
 Dodaj indeks:
@@ -367,15 +376,23 @@ Jak zmienił się plan i czas? Czy jest możliwość optymalizacji?
 ---
 > Wyniki: 
 
-```sql
---  ...
-```
+### Zapytanie 1
+![alt text](image-31.png)
+![alt text](image-32.png)
+
+Można zauważyć znacząco różny plan wykonania zapytania, tym razem zamiast operacji `scan` została wykonana operacja `seek` oraz `rid lookup`. Możemy zaobserwować również znaczący spadek kosztu (0,1391581 => 0,00657038), ilości odczytów logicznych (155 => 3) oraz czasu (0,002 => 0,0001581). Dzieje się tak dlatego, że dzięki założeniu indeksu, nie ma już potrzeby odczytania każdego rekordu, żeby znaleźć wszystkie spełniające klauzulę `WHERE`, a w zasadzie wystarczy tylko z +-jednej strony (plus też koszt dojścia do tej strony). Potencjalnym polem do optymalizacji zapytania jest wyeleminowanie potencjalnie drogiej operacji `rid lookup`, która odpowiada za dołączenie do wyniku zapytania wartości kolumn innych niż ten na których jest założony (lub tych, które uwzględnia w swojej strukturze) indeks nieklastrowy, poprzez zredukowanie liczby zwracanych kolumn, dołożenie poprzez klauzulę `include` kolumn do indeksu, które chcemy zobaczyć w wyniku, ewentualnie założyć indeks na kolumnach które chcemy zobaczyć w wyniku (to nie jest zbyt dobry pomysł, indeks będzie bardzo duży, a wcale nie filtrujemy po innych kolumnach) lub zastosowanie indeksu klastrowanego 
+
+### Zapytanie 2
+![alt text](image-33.png)
+![alt text](image-34.png)
+
+Ogólny plan zapytania zmienił się podobnie jak w punkcie wyżej, ale tutaj możeemy zaobserwować o wiele mniej spektakularne poprawy kosztów: czasu z 0,002 => 0,0001746, kosztu z 0,1391581 => 0,0507122 oraz ilości odczytów logicznych 155 => 18. Dzieje się tak za sprawą wysokiego kosztu operacji `rid lookup` (wykonuje się ona dla rekordów, które spełniają klauzulę `WHERE`, których w tym przypadku jest o wiele 16x więcej niż w poprzednim). W tym przypadku opisane wyżej metody optymalizacji pozwolą na jeszcze większy postęp, bo element zapytania, który jest przez nie redukowany zajmuje procentowo o wiele większą cześć całego wykonania zapytania.
 
 
 Dodaj indeks klastrowany:
 
 ```sql
-create clustered index customer_store_cls_idx on customer(storeid)
+create clustered index customer_store_cls_idx on customer(storeid) -- nie zadziala, zdublowanie nazwy 
 ```
 
 Czy zmienił się plan/koszt/czas? Skomentuj dwa podejścia w wyszukiwaniu krotek.
@@ -384,9 +401,20 @@ Czy zmienił się plan/koszt/czas? Skomentuj dwa podejścia w wyszukiwaniu krote
 ---
 > Wyniki: 
 
-```sql
---  ...
-```
+### Zapytanie 1
+![alt text](image-35.png)
+![alt text](image-36.png)
+
+Znowu możemy zaobseerwować znaczącą zmianę planu zapytania, zamiast operacji `seek` oraz `rid lookup` została wykonana operacja `seek`, ale na indeksie klastrowym. Możemy zaobserwować zmniejszenie się czasu 0,0001746 => 0,0001581, kosztu 0,00657038 => 0,0032831. Ilość logicznych odczytów stron wynosi 2. Spadek kosztów wynika z użycia indeksu klastrowanego, który z racji na swoją budowę (w zasadzie z racji na to, że fizycznie jest tabelą z danymi) eleminuje potrzebe dołączenie do wyniku zapytania wartości kolumn innych niż ten na których założony jest indeks, w indeksie fizycznie znajduje się wartość wszytkich kolumn.
+
+### Zapytanie 2
+![alt text](image-37.png)
+![alt text](image-38.png)
+
+Możemy zaobserwować dokładnie taką samą zmiane planu zapytań co w przypadku wyżej, z tym, że w tej sytacji zmiana przynosi o wiele bardziej spektakularne efekty, ponieważ w poprzedniej formie zapytania droga operacja `rid lookup`, która teraz została wyeliminowana, została wykonana dla 16 krotnie większej ilości rekordów. Czas pozostał ten sam, koszt zmalał z 0,0507122 => 0,0032996 oraz ilość odczytów logicznych z 18 => 2.
+
+### Podejścia w wyszukiwaniu krotek
+Zastosowane podejścia wyżej w w wyszukiwaniu krotek: indeks klastrowany oraz indeks nieklastrowany, znacząco poprawiają efektywność zapytań w porównaniu do ich braku, przy zastosowaniu warunku z klauzulą `WHERE`. Pozwalają na nieprzeszukiwania wszystkich rekordów w celu sprawdzenia klauzuli. Jednakże występują znaczące różnice pomiedzy nimi, w indeksie nieklastrowym bezpośredni dostęp jest do kolumn na których założony jest indeks oraz tych uwzględnionych w klauzuli `include` do reszty kolumn wymagana jest operacja `rid lookup`, która jest bardziej kosztowna. Z racji na to, że indeks klastrowany możemy założyć tylko jeden na całą tabele, trzeba bardzo rozważnie podchodzić do jego tworzenia. W przypadku kiedy nie mamy pewności, że bedzie najlepszym rozwiązaniem można zastosować indeks nieklastrowy wraz z klauzula `include` zawierającą porządane kolumy - je także powinniśmy dobierać rozważnie, rzadko kiedy potrzebne są wszystkie 
 
 
 # Zadanie 4 - dodatkowe kolumny w indeksie

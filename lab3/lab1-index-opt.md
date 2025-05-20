@@ -162,27 +162,36 @@ Wyniki:
 ![alt text](image-2.png)
 ![alt text](image-1.png)
 
-Zapytanie zwracające dane z wszystkich kolumn z połączonych za pomocą `salesorderid` tabel `salesorderheader` oraz `salesorderdetail`, które zostało wykonane _2008-06-01_ (nie istnieje takie). Jako, że nie ma tu żadnego indeksu nastąpiło pełne odczytanie tabeli `salesorderheader`, ale, że nie został znaleziony rekord odpowiadający klauzuli _WHERE_ nie nastąpiło pełne odczytanie drugiej tabeli. Z racji na brak indeksów zapytanie jest bardzo nieefektywne (w najgorszym wypadku wymaga pełnego skanowania każdej z tabeli). Proponowanym rozwiązaniem tego problemu jest założenie indeksu na klastrowego na kolumnie salesorderid oraz nieklastro 
+Zapytanie zwracające dane z wszystkich kolumn z połączonych za pomocą `salesorderid` tabel `salesorderheader` oraz `salesorderdetail`, które zostało wykonane _2008-06-01_ (nie istnieje takie). Jako, że nie ma tu żadnego indeksu nastąpiło pełne odczytanie tabeli `salesorderheader`, ale, że nie został znaleziony rekord odpowiadający klauzuli _WHERE_ nie nastąpiło pełne odczytanie drugiej tabeli. Z racji na brak indeksów zapytanie jest bardzo nieefektywne . Proponowanym rozwiązaniem tego problemu jest założenie indeksu na klastrowego na kolumnie `salesorderid` (w tym konkretnym przypadku to nie jest bardzo ważne) oraz nieklastrowego na polu `orderdate`, żeby móc przyśpieszyć wybieranie konkretnych ID oraz konkretnych datach. Indeksy również mogłby być stworzone z klauzulą `include` zawierającą odpowiednie kolumny, bardzo rzadko są potrzebne wszystkie.
 
 ### Zapytanie 1.1
 Wyniki:
 ![alt text](image-3.png)
 ![alt text](image-4.png)
 
-Zapytanie o bardzo podobnej charakterystyce co poprzednie, z tą różnicą, że ono zwraca rekordy, więc następuje też odczyt z drugiej tabeli (1499 logicznych operacji).
+Zapytanie o bardzo podobnej charakterystyce co poprzednie, z tą różnicą, że ono zwraca rekordy, więc następuje też odczyt z drugiej tabeli (1499 logicznych operacji). Proponowane usprawnienia są również takie same jak w poprzednim przypadku.
 
 ### Zapytanie 2
 Wyniki:
 ![alt text](image-5.png)
 ![alt text](image-6.png)
 
-W tym konkrentym zapytaniu brane są pod uwage również statystyki agregujące, widać, że logiczne odczyty są takie same (jest to intuicyjne, czytamy te same tabele), jednakże sam proces agregacji zajął wiele zasobów (34%). Proponowanym usprawnieniem byłoby założenie indeksu na kolumnach po których grupujemy.
+Zapytanie zwraca dla każdego produktu z tabeli `salesorderheader` sumę kupionych przedmiotów, sumaryczną cenę oraz sume atrybutu `linetotal`. Korzysta z tabel `salesorderheader` oraz `salesorderdetail` połączonych za pomocą `salesorderid`. Wyniki są następnie sortowane po wartościach funkcji agregującej _sum(orderqty) >= 100_. Z powodu braku indeksów nastąpił pełny odczyt z obydwu tabel (785 + 1499 odczytów logicznych), co również jest bardzo nieefektywne. Można zaobserwować również, że agregacja wyników była bardzo kosztowna, co również może być spowodowane brakiek jakichkolwiek indeksów. Proponowanym usprawnieniem byłoby założenie indeksu klastrowaego  w obu tabelach na kolumnie `salesorderid` oraz nieklastrowych na kolumnach `orderdate`, `productid`.
 
 ### Zapytanie 3
-```sql
---  ...
-```
+Wyniki:
+![alt text](image-7.png)
+![alt text](image-8.png)
 
+Zapytanie podobinie jak w zap.1 zwraca dane z połączonych za pomocą `salesorderid` tabel `salesorderheader` oraz `salesorderdetail`. Z tą różnicą, że zwracane są tylko dane z konkretnych kolumn oraz szukane są zamówienia wykonane w ciągu dat (również w żadnej z nich żadne zamówienie nie zostało wykonane) Jako, że nie ma tu żadnego indeksu nastąpiło pełne odczytanie tabeli `salesorderheader`, ale, że nie został znaleziony rekord odpowiadający klauzuli _WHERE_ nie nastąpiło pełne odczytanie drugiej tabeli. Z racji na brak indeksów zapytanie jest bardzo nieefektywne . Proponowanym rozwiązaniem tego problemu jest założenie indeksu na klastrowego na kolumnie `salesorderid` (w tym konkretnym przypadku to nie jest bardzo ważne) oraz nieklastrowego na polu `orderdate`, żeby móc przyśpieszyć wybieranie konkretnych ID oraz konkretnych datach.
+
+### Zapytanie 4
+Wyniki:
+![alt text](image-9.png)
+![alt text](image-10.png)
+
+
+Zapytanie zwraca dane z wybranych kolumn z połączonych  za pomocą `salesorderid` tabel `salesorderheader` oraz `salesorderdetail`, które mają jedno z 2 wybranych `carriertrackingnumber`. Jako, że istnieją takie rekordy i nie ma żadnych indeksów to nastąpił pełny odczyt z obu tabel. Warto zauważyć również, że w tym zapytaniu występuje klauzula `order by`, która co prawda nie jest zbyt kosztowna (być może dlatego, że po filtrze zostaje tylko 68 rekordów), ale mogłaby być przeprowadzona znacznie efektywniej gdyby zastosować indeksy. Proponowanym usprawnieniem byłoby założenie indeksu klastrowego na kolumnie `salesorderid` oraz nieklastrowego na kolumnie `carriertrackingnumber`.
 ---
 
 # Zadanie 2 - Dobór indeksów / optymalizacja

@@ -228,19 +228,23 @@ Która część zapytania ma największy koszt?
 
 ---
 > Wyniki: 
+![alt text](image-5.png)
+![alt text](image-6.png)
+![alt text](image-7.png)
 
-```sql
---  ...
-```
+Zapytanie wybiera z tabeli `purchaseorderdetail` wartości kolumn `rejectedqty`, `orderqty`, `productid`, `duedate` (lub też rózne wyrażenia zbudowane na ich podstawie), posortowane według `rejectedqty` malejąco i `productid` rosnąco. Analizując plan zapytania oraz jego koszt można zauważyć, że najbardziej kosztowną operacją podczas całego zapytania było `sort` (87% kosztów całego). Zostało przeprowadzone pełne skanowanie tabeli, które wymagało jedynie 13% kosztów całego zapytania. Zostało przeprowadzone 78 operacji logicznego odczytu, sumaryczny koszt zapytania wynosił 0,5274329 i trwało 17ms.
 
 Jaki indeks można zastosować aby zoptymalizować koszt zapytania? Przygotuj polecenie tworzące index.
 
+Jako, że występuje tu sortowanie na dwóch kolumnach, niemonotoniczne wobec siebie nawzajem (przy jednej kolumnie jest DESC, a przy drugiej ASC), proponujemy, aby stworzyć indeks nieklastrowany na tych własnie kolumnach, uwzględniający inne kolumny zwracane przez zapytanie oraz uwzględniający też monitoczności kolumn, według których sortujemy.
 
 ---
 > Wyniki: 
 
 ```sql
---  ...
+CREATE NONCLUSTERED INDEX purchaseorderdetail_rejectedqty_productid_idx
+ON purchaseorderdetail (rejectedqty DESC, productid ASC)
+INCLUDE (orderqty, duedate);
 ```
 
  Ponownie wykonaj analizę zapytania:
@@ -248,10 +252,13 @@ Jaki indeks można zastosować aby zoptymalizować koszt zapytania? Przygotuj po
 
 ---
 > Wyniki: 
+![alt text](image-8.png)
+![alt text](image-9.png)
+![alt text](image-10.png)
 
-```sql
---  ...
-```
+Analizując zapytanie wykonane po utworzeniu indeksu można zauważyć, że nie ma operacji `sort` oraz operacji pełnego skanowania. Stało się tak, dlatego, że indeks pozwolił na przechowywanie struktury tabeli wraz z monotonicznością, którą chcemy uzyskać w zapytaniu. Pełne skanowanie też nie musiało być wykonane, chociaż w tym wypadku z racji na to, że rekordy nie sa filtrowane nie obesrwujemy zbytniego spadku kosztu na tej operacji. W przeciwieństwie do kosztu całego zapytanie, ktory teraz wynosi 0,04056267, poprzez usunięciu kosztu sortowania oraz zredukowania (nieznacznego, ale jednak) kosztu skanowania tabeli (z pełnego skanowania => `index seek`)
+
+
 
 
 

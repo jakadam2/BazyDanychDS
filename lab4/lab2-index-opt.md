@@ -103,8 +103,16 @@ Co można o nich powiedzieć?
 
 > Wyniki:
 
-![alt text]()
-![alt text]()
+![alt text](zdj1.png)
+![alt text](zdj2.png)
+![alt text](zdj3.png)
+
+### Komentarz:
+Dla wszystkich trzech zapytań wynik jest identyczny - zwracany jest jeden rekord osoby:
+- firstname = 'Osarumwense'
+- lastname = 'Agbonile'
+
+Analiza pokazuje, że mimo identycznego planu wykonania (Table Scan) dla wszystkich trzech zapytań, różnią się one selektywnością. Zapytanie 2 (WHERE lastname = 'Agbonile' AND firstname = 'Osarumwense') jest najbardziej precyzyjne, bo trafia dokładnie w jeden wiersz. Zapytanie 3 (WHERE firstname = 'Osarumwense') przeszukuje aż 14 wierszy i ma najgorszą selektywność. Brak indeksów powoduje, że SQL Server musi skanować całą tabelę niezależnie od dokładności zapytania.
 
 Przygotuj indeks obejmujący te zapytania:
 
@@ -119,7 +127,14 @@ Sprawdź plan zapytania. Co się zmieniło?
 
 > Wyniki:
 
-![alt text](zdj1.png)
+![alt text](zdj4.png)
+![alt text](zdj5.png)
+![alt text](zdj6.png)
+![alt text](zdj7.png)
+![alt text](zdj8.png)
+
+### Komentarz:
+Po utworzeniu indeksu na kolumnach (lastname, firstname) zapytania filtrujące po nazwisku oraz po nazwisku i imieniu zostały znacząco zoptymalizowane – zaczęły korzystać z operacji Index Seek, co obniżyło ich koszt do 4–5%. Zapytanie filtrujące tylko po imieniu nadal korzysta z Index Scan, ponieważ nie może użyć indeksu zaczynającego się od lastname. W efekcie jego koszt wzynosi aż 91%, a SQL Server sam zasugerował utworzenie dodatkowego indeksu na firstname. Aby zoptymalizować wszystkie trzy zapytania, warto więc dodać również osobny indeks na kolumnie firstname.
 
 
 Przeprowadź ponownie analizę zapytań tym razem dla parametrów: `FirstName = ‘Angela’` `LastName = ‘Price’`. (Trzy zapytania, różna kombinacja parametrów).
@@ -130,9 +145,13 @@ Czym różni się ten plan od zapytania o `'Osarumwense Agbonile'` . Dlaczego ta
 
 > Wyniki:
 
-```sql
---  ...
-```
+![alt text](zdj9.png)
+![alt text](zdj10.png)
+![alt text](zdj11.png)
+![alt text](zdj12.png)
+
+### Komentarz:
+W przypadku zapytań dla Angela i Price SQL Server częściej używał pełnego skanowania tabeli (Table Scan), ponieważ wartości Price i Angela występują bardzo często, co czyni warunki mało selektywnymi. Dla Osarumwense i Agbonile, gdzie dane były unikalne, wykorzystywany był Index Seek, co było bardziej wydajne. Różnica wynika z selektywności - im rzadsze dane, tym większa szansa na użycie indeksu.
 
 # Zadanie 2
 
@@ -270,6 +289,13 @@ from saleshistory
 group by productid
 order by productid
 ```
+> Wyniki:
+![alt text](zdj13.png)
+![alt text](zdj14.png)
+![alt text](zdj15.png)
+
+### Komentarz:
+Wyniki pokazują, że zapytanie musiało przetworzyć ponad 12 milionów wierszy za pomocą Clustered Index Scan, co wiązało się z dużym kosztem. SQL Server użył równoległości i operacji Hash Match, co potwierdza, że klasyczny indeks klastrowy nie jest wydajny przy analizach z agregacjami.
 
 Załóż indeks typu column store:
 
@@ -284,10 +310,13 @@ Co to są indeksy colums store? Jak działają? (poszukaj materiałów w interne
 ---
 
 > Wyniki:
+![alt text](zdj16.png)
+![alt text](zdj17.png)
+![alt text](zdj18.png)
 
-```sql
---  ...
-```
+### Komentarz:
+Zastosowanie indeksu typu columnstore znacząco przyspieszyło zapytanie agregujące – czas wykonania spadł z około 0,40 s do 0,16 s. SQL Server zamiast pełnego skanowania wierszy (Clustered Index Scan) użył odczytu kolumnowego (Columnstore Index Scan) i przetwarzania wsadowego, co pozwoliło na szybsze i bardziej efektywne wykonanie operacji. Columnstore indexy przechowują dane w kolumnach, co ułatwia kompresję i redukuje ilość danych do przetworzenia. Tego typu indeksy są idealne do analiz dużych zbiorów danych z użyciem agregacji i GROUP BY.
+
 
 # Zadanie 5 – własne eksperymenty
 

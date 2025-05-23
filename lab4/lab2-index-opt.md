@@ -1,4 +1,5 @@
-# Indeksy, optymalizator <br>Lab 2
+# Indeksy,  optymalizator <br>Lab 2
+>>>>>>> adam
 
 <!-- <style scoped>
  p,li {
@@ -14,17 +15,18 @@
 
 ---
 
-**Imię i nazwisko:**
+**Imię i nazwisko:** Damian Torbus, Adam Woźny
 
----
+--- 
 
-Celem ćwiczenia jest zapoznanie się z planami wykonania zapytań (execution plans), oraz z budową i możliwością wykorzystaniem indeksów
+Celem ćwiczenia jest zapoznanie się z planami wykonania zapytań (execution plans), oraz z budową i możliwością wykorzystaniem indeksów 
+
 
 Swoje odpowiedzi wpisuj w miejsca oznaczone jako:
 
 ---
+> Wyniki: 
 
-> Wyniki:
 
 ```sql
 --  ...
@@ -84,12 +86,12 @@ select businessentityid
 into person
 from adventureworks2017.person.person
 ```
-
 ---
 
 Wykonaj analizę planu dla trzech zapytań:
 
 ```sql
+
 select * from [person] where lastname = 'Agbonile'
 
 select * from [person] where lastname = 'Agbonile' and firstname = 'Osarumwense'
@@ -118,6 +120,7 @@ Przygotuj indeks obejmujący te zapytania:
 
 ```sql
 create index person_first_last_name_idx
+
 on person(lastname, firstname)
 ```
 
@@ -164,36 +167,60 @@ select * into product from adventureworks2017.production.product
 Stwórz indeks z warunkiem przedziałowym:
 
 ```sql
-create nonclustered index product_range_idx
-    on product (productsubcategoryid, listprice) include (name)
+
+create nonclustered index product_range_idx  
+    on product (productsubcategoryid, listprice) include (name)  
 where productsubcategoryid >= 27 and productsubcategoryid <= 36
 ```
 
 Sprawdź, czy indeks jest użyty w zapytaniu:
 
 ```sql
-select name, productsubcategoryid, listprice
-from product
+select name, productsubcategoryid, listprice  
+from product  
 where productsubcategoryid >= 27 and productsubcategoryid <= 36
 ```
+
 
 Sprawdź, czy indeks jest użyty w zapytaniu, który jest dopełnieniem zbioru:
 
 ```sql
-select name, productsubcategoryid, listprice
-from product
+select name, productsubcategoryid, listprice  
+from product  
 where productsubcategoryid < 27 or productsubcategoryid > 36
 ```
 
-Skomentuj oba zapytania. Czy indeks został użyty w którymś zapytaniu, dlaczego? Jak działają indeksy z warunkiem?
+
+Skomentuj oba zapytania. Czy indeks został użyty w którymś zapytaniu, dlaczego?  Jak działają indeksy z warunkiem?
+
+Postanowaliśmy również dołożyć zapytanie 3, którego celem jest sprawdzenie przypadku, kiedy zbiór danych, które pokrywa zapytanie będzie częściowo rozłączny z danymi na ktorych został założony indeks.
+```sql
+select name, productsubcategoryid, listprice
+from product
+where productsubcategoryid >= 26 and productsubcategoryid <= 36;
+``` 
 
 ---
+> Wyniki: 
 
-> Wyniki:
+### Zapytanie 1
+![alt text](image.png)
+![alt text](image-2.png)
 
-```sql
---  ...
-```
+Indeks został użyty w tym zapytaniu, dzieje się tak, dlatego, że zakres danych, które obejmuje zapytanie zawiera się w przedziale (dla danej kolumny) na którym został założony indeks. Z racji użycia indeksu zostały wykonane tylko 2 operacje logicznego odczytania, koszt wyniósł 0,0033007.
+
+### Zapytanie 2
+![alt text](image-3.png)
+![alt text](image-1.png)
+
+Indeks nie został użyty w tym zapytaniu, dzieje się tak, dlatego, że zakres danych, które obejmuje zapytanie jest rozłączny z przedziałem, na którym został założony indeks. Z racji braku użycia indeksu zostały wykonane 13 operacje logicznego odczytania, koszt wyniósł 0,01272529.
+
+### Zapytanie 3
+![alt text](image-4.png)
+Pomimo częsciowej zgodności danymi które obejmuje indeks i zapytanie, została wykonana operacja pełnego skanowania tabeli, koszty porównywalne jak w zapytaniu 2.
+
+Oba zapytania wybierają kolumny `name`, `productsubcategoryid`, `listprice` z tabeli `product`, oba dodatkowo posiadają w swojej strukturze klauzulę `WHERE`. Pierwsze zapytanie skorzystało z już istniejącego indeksu `product_range_idx`, założonego na kolumnach `productsubcategoryid`, `listprice` z warunkiem `productsubcategoryid >= 27 and productsubcategoryid <= 36`, ponieważ warunki zapytania obejmowały dane, które spełniają warunek indeksu. W przypadku drugiego zapytania sytuacja była odwrotna, dane, które były objęte zapytaniem nie zawierały się w danych, na których był założony indeks. Dzięki temu, że indeks był założony lub uwzględniał każdą z kolumn nie musiały być wykonywane żadne inne operacje poza `index seek`, co widać w kosztach zapytań (0,0033007 vs 0,01272529). Indeksy z warunkiem to indeksy nieklastrowane, które w swojej strukturze obejmują tylko podzbiór rekordów spełniejący wspomniany warunek, przez co pozwalają na efektywne wyszukiwania danych tylko z tego podzbioru. Wykorzystuje się je ponieważ są tanie w budowie, utrzymaniu, zajmują mniej miejsca oraz pozwalają na szybsze wykonanie operacji `index seek` z racji na swój mniejszy rozmiar. Trzeba być jednak ostrożnym podczas zakładania, ponieważ jakikolwiek brak pokrycia danych z zapytania poprzez indeks wymusza pełne skanowanie tabeli.
+
 
 # Zadanie 3
 
@@ -206,43 +233,50 @@ select * into purchaseorderdetail from  adventureworks2017.purchasing.purchaseor
 Wykonaj analizę zapytania:
 
 ```sql
-select rejectedqty, ((rejectedqty/orderqty)*100) as rejectionrate, productid, duedate
-from purchaseorderdetail
+select rejectedqty, ((rejectedqty/orderqty)*100) as rejectionrate, productid, duedate  
+from purchaseorderdetail  
 order by rejectedqty desc, productid asc
 ```
 
 Która część zapytania ma największy koszt?
 
 ---
+> Wyniki: 
+![alt text](image-5.png)
+![alt text](image-6.png)
+![alt text](image-7.png)
 
-> Wyniki:
-
-```sql
---  ...
-```
+Zapytanie wybiera z tabeli `purchaseorderdetail` wartości kolumn `rejectedqty`, `orderqty`, `productid`, `duedate` (lub też rózne wyrażenia zbudowane na ich podstawie), posortowane według `rejectedqty` malejąco i `productid` rosnąco. Analizując plan zapytania oraz jego koszt można zauważyć, że najbardziej kosztowną operacją podczas całego zapytania było `sort` (87% kosztów całego). Zostało przeprowadzone pełne skanowanie tabeli, które wymagało jedynie 13% kosztów całego zapytania. Zostało przeprowadzone 78 operacji logicznego odczytu, sumaryczny koszt zapytania wynosił 0,5274329 i trwało 17ms.
 
 Jaki indeks można zastosować aby zoptymalizować koszt zapytania? Przygotuj polecenie tworzące index.
 
----
-
-> Wyniki:
-
-```sql
---  ...
-```
-
-Ponownie wykonaj analizę zapytania:
+Jako, że występuje tu sortowanie na dwóch kolumnach, niemonotoniczne wobec siebie nawzajem (przy jednej kolumnie jest DESC, a przy drugiej ASC), proponujemy, aby stworzyć indeks nieklastrowany na tych własnie kolumnach, uwzględniający inne kolumny zwracane przez zapytanie oraz uwzględniający też monitoczności kolumn, według których sortujemy.
 
 ---
-
-> Wyniki:
+> Wyniki: 
 
 ```sql
---  ...
+CREATE NONCLUSTERED INDEX purchaseorderdetail_rejectedqty_productid_idx
+ON purchaseorderdetail (rejectedqty DESC, productid ASC)
+INCLUDE (orderqty, duedate);
 ```
+
+ Ponownie wykonaj analizę zapytania:
+
+
+---
+> Wyniki: 
+![alt text](image-8.png)
+![alt text](image-9.png)
+![alt text](image-10.png)
+
+Analizując zapytanie wykonane po utworzeniu indeksu można zauważyć, że nie ma operacji `sort` oraz operacji pełnego skanowania. Stało się tak, dlatego, że indeks pozwolił na przechowywanie struktury tabeli wraz z monotonicznością, którą chcemy uzyskać w zapytaniu. Pełne skanowanie też nie musiało być wykonane, chociaż w tym wypadku z racji na to, że rekordy nie sa filtrowane nie obesrwujemy zbytniego spadku kosztu na tej operacji. W przeciwieństwie do kosztu całego zapytanie, ktory teraz wynosi 0,04056267, poprzez usunięciu kosztu sortowania oraz zredukowania (nieznacznego, ale jednak) kosztu skanowania tabeli (z pełnego skanowania => `index seek`)
+
+
+
+
 
 # Zadanie 4 – indeksy column store
-
 Celem zadania jest poznanie indeksów typu column store
 
 Utwórz tabelę testową:
@@ -323,7 +357,6 @@ Zastosowanie indeksu typu columnstore znacząco przyspieszyło zapytanie agreguj
 Należy zaprojektować tabelę w bazie danych, lub wybrać dowolny schemat danych (poza używanymi na zajęciach), a następnie wypełnić ją danymi w taki sposób, aby zrealizować poszczególne punkty w analizie indeksów. Warto wygenerować sobie tabele o większym rozmiarze.
 
 Do analizy, proszę uwzględnić następujące rodzaje indeksów:
-
 - Klastrowane (np.  dla atrybutu nie będącego kluczem głównym)
 - Nieklastrowane
 - Indeksy wykorzystujące kilka atrybutów, indeksy include
@@ -344,7 +377,9 @@ Proszę przygotować zestaw zapytań do danych, które:
 - Komentarze do zapytań, ich wyników
 - Sprawdzenie, co proponuje Database Engine Tuning Advisor (porównanie czy udało się Państwu znaleźć odpowiednie indeksy do zapytania)
 
-> Wyniki:
+
+
+> Wyniki: 
 
 ```sql
 --  ...

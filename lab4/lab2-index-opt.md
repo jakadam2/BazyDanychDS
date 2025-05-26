@@ -1,5 +1,4 @@
 # Indeksy,  optymalizator <br>Lab 2
->>>>>>> adam
 
 <!-- <style scoped>
  p,li {
@@ -377,8 +376,166 @@ Proszę przygotować zestaw zapytań do danych, które:
 - Komentarze do zapytań, ich wyników
 - Sprawdzenie, co proponuje Database Engine Tuning Advisor (porównanie czy udało się Państwu znaleźć odpowiednie indeksy do zapytania)
 
+## Eksperymenty
 
+Eksperymenty będą przeprowadzone na tabeli AccountingDocuments wzorowanej na strukturach danych z systemów SAP/EPR. Zdecydowaliśmy się na taki przykład z uwagi na powszechność obsługi tego typu danych biznesowych w hurtowniach baz danych, co może prowadzić nas do bliższych prawdziwemu zastosowaniu.
 
+Tabela zawiera dane n.t. faktur pewnej firmy. Warto zwrócić uwagę na przyrostowy charakter danych oraz na zastosowanie _soft delete'u_ - dane są oznaczane jako usunięte w miejsce fizycznych operacji, nie zawsze można sobie pozwolić na utratę danych (n.p prowadzimy archiwum), ale posiadanie wszystkich danych może być uciążliwe.
+
+DDL tabeli:
+```sql
+CREATE TABLE AccountingDocuments (
+    DocumentID INT IDENTITY,      
+    CompanyCode VARCHAR(10),              
+    FiscalYear INT,                       
+    DocumentNumber VARCHAR(20),           
+    PostingDate DATE,
+    DocumentDate DATE,
+    Amount DECIMAL(18,2),
+    Currency VARCHAR(3),                
+    DocumentType VARCHAR(5),              
+    IsDeleted BIT DEFAULT 0,              
+    CreatedAt DATETIME DEFAULT GETDATE()
+);
+```
+
+Generowanie danych:
+```sql
+INSERT INTO AccountingDocuments (
+    CompanyCode, FiscalYear, DocumentNumber,
+    PostingDate, DocumentDate, Amount,
+    Currency, DocumentType, IsDeleted
+)
+SELECT
+    CHOOSE(ABS(CHECKSUM(NEWID())) % 3 + 1, 'PL01', 'DE02', 'US03'),
+    2020 + ABS(CHECKSUM(NEWID())) % 5,
+    FORMAT(ABS(CHECKSUM(NEWID())) % 999999, '000000'),
+    DATEADD(DAY, -ABS(CHECKSUM(NEWID())) % 1000, GETDATE()),
+    DATEADD(DAY, -ABS(CHECKSUM(NEWID())) % 1000, GETDATE()),
+    ROUND(RAND(CHECKSUM(NEWID())) * 10000, 2),
+    CHOOSE(ABS(CHECKSUM(NEWID())) % 3 + 1, 'PLN', 'EUR', 'USD'),
+    CHOOSE(ABS(CHECKSUM(NEWID())) % 4 + 1, 'KR', 'DR', 'SA', 'AB'),
+    IIF(ABS(CHECKSUM(NEWID())) % 100 < 5, 1, 0)  
+FROM sys.all_objects a CROSS JOIN sys.all_objects b
+WHERE a.object_id < 200 AND b.object_id < 100;
+```
+Generowanie danych odbywa się w sposób losowy, inspirowane danymi faktycznymi. Ok 5% rekordów jest oznaczonych jako usuniętych
+```sql
+SELECT COUNT(1) FROM AccountingDocuments;
+```
+Zostało wygenerowane ok 5,7 miliona rekodów (dokładnie 5712100), nie do końca było to planowane, niedoszacowaliśmy ilość rekordów
+
+### Indeksy użyte podczas eksperymentów
+- Indeks klastrowany założony na innej kolumnie niż klucz główny. Wybraliśmy kolumne `PostingDate` z uwagi na to, że często filtuje się po dacie
+```sql
+CREATE CLUSTERED INDEX IX_AccountingDocuments_PostingDate
+ON AccountingDocuments(PostingDate);
+```
+- Indeks nieklastrowany założony na więcej niż jednej kolumnie
+```sql
+CREATE NONCLUSTERED INDEX IX_AD_Company_Year
+ON AccountingDocuments(CompanyCode, FiscalYear);
+```
+- Indeks nieklastrowany z użyciem klauzuli `include`
+```sql
+CREATE NONCLUSTERED INDEX IX_AD_DocumentNumber_Include
+ON AccountingDocuments(DocumentNumber)
+INCLUDE (Amount, Currency);
+```
+- Indeks warunkowy - tylko nieusunięte rekordy
+```sql
+CREATE NONCLUSTERED INDEX IX_AD_NotDeleted
+ON AccountingDocuments(CompanyCode, PostingDate)
+WHERE IsDeleted = 0;
+```
+- Indeks _columnstore_ 
+```sql
+CREATE CLUSTERED COLUMNSTORE INDEX IX_AD_Columnstore
+ON AccountingDocuments;
+```
+
+### Zapytania testujące
+
+#### Użycie ineksu klastrowego + pułapka
+```sql
+SELECT * FROM AccountingDocuments
+WHERE PostingDate BETWEEN '2024-01-01' AND '2024-01-31';
+```
+
+W tym teście będziemy analizować bardzo proste zapytanie, które wybiera wartość wszystkich atrybutów z tabeli oraz za pomocą klauzuli `WHERE` filtruje wynik, tak żeby `PostingDate` (na którym jest założony indeks klastrowy) był w stycznu 2024
+
+##### Przed założeniem inseksu
+##### Po założeniu indeksu
+##### Pułapka
+##### Opis i wnioski
+```sql
+SELECT * FROM AccountingDocuments
+WHERE YEAR(PostingDate) = 2024;
+```
+Funkcja w wherze, indeks nie zostanie wykorzystany 
+
+ 
+
+Jak można zauważyć nastąpiło pełne skanowanie tabeli, co jest spodziewanym wynikiem ze względu na brak jakichakolwiek indeksów
+
+#### Użycie indeksu założonego na dwóch kolumnach 
+```sql
+SELECT * FROM AccountingDocuments
+WHERE CompanyCode = 'PL01' AND FiscalYear = 2023;
+```
+oraz 
+```sql
+SELECT CompanyCode, FiscalYear FROM AccountingDocuments
+WHERE CompanyCode = 'PL01' AND FiscalYear = 2023;
+```
+##### Przed założeniem indeksu
+##### Po założeniu indeksu
+##### Opis i wnioski
+
+#### Użycia indeksu include
+```sql
+SELECT Amount, Currency
+FROM AccountingDocuments
+WHERE DocumentNumber = '000123';
+```
+##### Przed założeniem indeksu
+##### Po założeniu indeksu
+##### Opis i wnioski
+
+#### Użycie indeksu warunkowego 
+```sql
+SELECT * FROM AccountingDocuments
+WHERE IsDeleted = 0 AND CompanyCode = 'PL01' AND PostingDate > '2024-01-01';
+```
+Bad practise:
+```sql
+SELECT * FROM AccountingDocuments WITH (INDEX(IX_AD_NotDeleted))
+WHERE PostingDate > '2024-01-01';
+```
+##### Przed założeniem indeksu
+##### Po założeniu indeksu
+##### Opis i wnioski
+
+#### Indeks columstore
+```sql
+SELECT CompanyCode, SUM(Amount) AS Total
+FROM AccountingDocuments
+WHERE FiscalYear = 2023
+GROUP BY CompanyCode;
+```
+
+#### Wymuszenie użycia indeksu
+```sql
+SELECT * FROM AccountingDocuments WITH (INDEX(IX_AD_Company_Year))
+WHERE CompanyCode = 'PL01';
+```
+
+#### Dodatkowa pułapka
+```sql
+SELECT * FROM AccountingDocuments
+WHERE CompanyCode = 'PL01' OR Currency = 'USD';
+```
+Jak ją obejść ???
 > Wyniki: 
 
 ```sql

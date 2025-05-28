@@ -423,7 +423,7 @@ Generowanie danych odbywa się w sposób losowy, inspirowane danymi faktycznymi.
 ```sql
 SELECT COUNT(1) FROM AccountingDocuments;
 ```
-Zostało wygenerowane ok 5,7 miliona rekodów (dokładnie 5712100), nie do końca było to planowane, niedoszacowaliśmy ilość rekordów
+Zostało wygenerowane ok 5,7 miliona rekodów (dokładnie 5712100).
 
 ### Indeksy użyte podczas eksperymentów
 - Indeks klastrowany założony na innej kolumnie niż klucz główny. Wybraliśmy kolumne `PostingDate` z uwagi na to, że często filtuje się po dacie
@@ -439,13 +439,14 @@ ON AccountingDocuments(CompanyCode, FiscalYear);
 - Indeks nieklastrowany z użyciem klauzuli `include`
 ```sql
 CREATE NONCLUSTERED INDEX IX_AD_DocumentNumber_Include
-ON AccountingDocuments(DocumentNumber)
+ON AccountingDocuments(CompanyCode, FiscalYear)
 INCLUDE (Amount, Currency);
 ```
 - Indeks warunkowy - tylko nieusunięte rekordy
 ```sql
 CREATE NONCLUSTERED INDEX IX_AD_NotDeleted
 ON AccountingDocuments(CompanyCode, PostingDate)
+INCLUDE (Amount, Currency)
 WHERE IsDeleted = 0;
 ```
 - Indeks _columnstore_ 
@@ -461,86 +462,132 @@ ON AccountingDocuments;
 SELECT * FROM AccountingDocuments
 WHERE PostingDate BETWEEN '2024-01-01' AND '2024-01-31';
 ```
-
+```sql
+CREATE CLUSTERED INDEX IX_AccountingDocuments_PostingDate
+ON AccountingDocuments(PostingDate);
+```
 W tym teście będziemy analizować bardzo proste zapytanie, które wybiera wartość wszystkich atrybutów z tabeli oraz za pomocą klauzuli `WHERE` filtruje wynik, tak żeby `PostingDate` (na którym jest założony indeks klastrowy) był w stycznu 2024
 
 ##### Przed założeniem inseksu
+![alt text](image-11.png)
+![alt text](image-13.png)
+![alt text](image-14.png)
 ##### Po założeniu indeksu
+![alt text](image-12.png)
+![alt text](image-15.png)
+![alt text](image-16.png)
 ##### Pułapka
-##### Opis i wnioski
 ```sql
 SELECT * FROM AccountingDocuments
-WHERE YEAR(PostingDate) = 2024;
+WHERE YEAR(PostingDate) = 2024 AND MONTH(PostingDate) = 1;
 ```
-Funkcja w wherze, indeks nie zostanie wykorzystany 
+![alt text](image-17.png)
+##### Opis i wnioski
 
- 
+Jak można zauważyć w przypadku, w którym indeks klastrowany nie był założony nastąpiła pełne i równoległe skanowanie całej tabeli(operacji `table scan` - skanowanie, `gathering stream` - zrównoleglenie), które z racji jej rozmiaru wygenerowało ok 50k operacji odczytu logicznego, miało bardzo wysoki koszt 39,8  oraz trwało 400ms, co jest bardzo dużą wartością dla takiego prostego zapytanie. Stało się tak dlatego, że aby znaleźć wszystkie rekordy spełniające warunek klauzuli `WHERE` trzeba było sprawdzić warunek dla każdego pojedynczego rekordu. Po założeniu indeksu klastrowego można zaobserwować znaczący spadek ilości logicznych odczytów (45k => 1.5k), kosztu zapytania (39.8 => 1.32) oraz czasu trwania (400ms => 147ms, ale tu nie było nic zrównoleglane CPU time ok 9x mniejszy). Operacje zrównoleglonego pełnego skanowania zastąpiono operacją wyszukiwania po indeksu (`INDEX SEEK`), z racji, że to jest indeks klastrowany pomimo wybierania wszystkich kolumn (indeks jest założony tylko na jednej) nie ma tu operacji `RID-lookup` ponieważ  wszystkie dane fizycznie są indeksowane.
 
-Jak można zauważyć nastąpiło pełne skanowanie tabeli, co jest spodziewanym wynikiem ze względu na brak jakichakolwiek indeksów
+_Pułapka_: Indeks nie zadziała, na funkcji z kolumny, pomimo takiego samego logicznego znaczenia zapytania. Analizując jego budowe jest to bardzo logiczne, metryka (a więc i jego budowa) indeksu może być całkowicie zmieniona poprzez funkcje.
 
 #### Użycie indeksu założonego na dwóch kolumnach 
 ```sql
-SELECT * FROM AccountingDocuments
+SELECT CompanyCode, FiscalYear, Amount, Currency FROM AccountingDocuments
 WHERE CompanyCode = 'PL01' AND FiscalYear = 2023;
 ```
-oraz 
+
 ```sql
-SELECT CompanyCode, FiscalYear FROM AccountingDocuments
-WHERE CompanyCode = 'PL01' AND FiscalYear = 2023;
+CREATE NONCLUSTERED INDEX IX_AD_Company_Year -- 1
+ON AccountingDocuments(CompanyCode, FiscalYear);
+
+CREATE NONCLUSTERED INDEX IX_AD_Company_Year2 -- 2
+ON AccountingDocuments(CompanyCode, FiscalYear)
+INCLUDE (Amount, Currency);
 ```
 ##### Przed założeniem indeksu
-##### Po założeniu indeksu
+![alt text](image-18.png)
+![alt text](image-19.png)
+![alt text](image-20.png)
+##### Po założeniu indeksu 1
+![alt text](image-21.png)
+![alt text](image-22.png)
+![alt text](image-23.png)
+##### Po założeniu indeksu 2
+![alt text](image-24.png)
+![alt text](image-25.png)
+![alt text](image-26.png)
 ##### Opis i wnioski
 
-#### Użycia indeksu include
-```sql
-SELECT Amount, Currency
-FROM AccountingDocuments
-WHERE DocumentNumber = '000123';
-```
-##### Przed założeniem indeksu
-##### Po założeniu indeksu
-##### Opis i wnioski
+Analizując plany poszczególnych zapytań jako pierwszy można wysnuć wniosek, że po wdrożeniu indeksu nr1 plan zapytania pozostał dokładnie taki sam jak w przypadku, kiedy nie było żadnego indeksu. Stało się tak dlatego, że pomimo użycie w tej sytuacji może się wydawać na pierwszy rzut oka logiczne, ponieważ indeks jest założony dokładnie na tych kolumnach, które występują w klauzuli `WHERE`, ale jednak jako, że wybieramy dodatkowe 2 kolumny, których indeks nie obejmuje to po operacji `INDEX SEEK` pomimo, że jest bardzo efektywna musiałby nastąpić operacja `RID-lookup`, która jest bardzo kosztowna, kiedy jest bardzo dużo rekordów w wyników (a tak jest w tym wypadku, duża tabela i dosyć ogólny warunek), w skutek czego kompilator zdecydował, żeby nie używać tego indeksu w tym wypadku. Tak, więc w przypadku 2 pierwszych zapytań nastąpiło pełne skanowanie tabeli w celu określenie warunku klauzuli `WHERE`, co spowodowało 49k operacji logicznego odczytu, wygenerowało koszt 39,8 oraz trwało 290ms. W trzecim zapytaniu w odróżnienu od poprzednich został użyty indeks, ponieważ klauzula `INCLUDE` rozwiązała problem z operacją `RID-lookup` (nie jest ona już potrzebna, ponieważ wszystkie kolumny które wybieramy fizycznie znajdują się w indeksie), więc nastąpiła efektywna operacja `INDEX SEEK`, która pozwoliła zredukować ilość odczytów logicznych (50k => 1.5k), koszt (39,8 => 1.7) oraz nieznacznie czas (290ms => 180ms, ale tu znowu pełne skanowanie było zrównoleglone, 9 krotna różnica w CPU time).
 
 #### Użycie indeksu warunkowego 
 ```sql
-SELECT * FROM AccountingDocuments
+SELECT CompanyCode, PostingDate, Amount, Currency FROM AccountingDocuments -- 1
 WHERE IsDeleted = 0 AND CompanyCode = 'PL01' AND PostingDate > '2024-01-01';
+
+SELECT CompanyCode, PostingDate, Amount, Currency FROM AccountingDocuments -- 2
+WHERE CompanyCode = 'PL01' AND PostingDate > '2024-01-01';
+
+CREATE NONCLUSTERED INDEX IX_AD_NotDeleted
+ON AccountingDocuments(CompanyCode, PostingDate)
+INCLUDE (Amount, Currency)
+WHERE IsDeleted = 0;
 ```
+
+
 Bad practise:
 ```sql
-SELECT * FROM AccountingDocuments WITH (INDEX(IX_AD_NotDeleted))
+SELECT CompanyCode, PostingDate, Amount, Currency FROM AccountingDocuments WITH (INDEX(IX_AD_NotDeleted))
 WHERE PostingDate > '2024-01-01';
 ```
+![alt text](image-33.png)
 ##### Przed założeniem indeksu
-##### Po założeniu indeksu
+![alt text](image-27.png)
+![alt text](image-28.png)
+![alt text](image-29.png)
+##### Po założeniu indeksu dla 1
+![alt text](image-30.png)
+![alt text](image-31.png)
+![alt text](image-32.png)
+##### Po założeniu indeksu dla 2
+![alt text](image-34.png)
 ##### Opis i wnioski
+Pierwszym zaobserwowanym wnioskiem w przypadku indeksów warunkowych, powinien być fakt, że w przypadku braku takiego samego warunku w klazuli `WHERE` nie jest on używane. Wynika to bezpośrednio z jego budowy (w jego skład nie wchodzą wiersze wykluczone przez `WHERE`). Wtedy zarówno z jak i bez indeksu zapytanie zachowuje się tak samo, następuje pełne skanowanie tabeli z danymi, co skutkuje 50k odczytów logicznych, kosztem 41, oraz czasem wykonania 820ms. Z kolei kiedy warunek, który został użyty znajduje się w (może być też jakiś inny, jeśli jest stworzony indeks to raczej logicznie powinien) w klauzuli `WHERE` to indeks jest użyty dokładnie w ten sam sposób, jak taki bez warunków. Następuje operacja `INDEX SEEK`, co pozwala zredukować odczyty logiczne 50k => 4.3, czas się zwiekszył 820ms => 1040ms (pewnie to przez ilość wątków), oraz koszt 41 => 4.7. Trzeba też również zwrócić uwagę, na fakt, że budowa i utrzymanie takiego indeksu (zwłaszcza utrzymanie) jest tańsze niż takiego zwykłego. W tej sytuacji jest to cięzkie do zauważenia (jest ok 5% usuniętych), ale zdarzają się sytuację, gdzie jest ok20% usuniętych. 
 
 #### Indeks columstore
 ```sql
-SELECT CompanyCode, SUM(Amount) AS Total
+SELECT CompanyCode, DocumentDate, SUM(Amount) AS Total
 FROM AccountingDocuments
-WHERE FiscalYear = 2023
-GROUP BY CompanyCode;
+GROUP BY CompanyCode, DocumentDate;
 ```
+```sql
+CREATE CLUSTERED COLUMNSTORE INDEX IX_AD_Columnstore
+ON AccountingDocuments;
+```
+##### Bez indeksu
+![alt text](image-35.png)
+![alt text](image-36.png)
+![alt text](image-37.png)
+##### Po założeniu indeksu
+![alt text](image-38.png)
+![alt text](image-39.png)
+![alt text](image-40.png)
+##### Opis i wnioski
+Indeks `columnstore` z racji na dość mocną ingerencje samej struktury tabeli pozwolił na znaczące przyśpieszenie i zmniejszenie kosztów w porównaniu do jego braku (typowa sytuacja - pełne równoległe skanowanie), kosztu z 39 => 1.7, czasu wykonania z 193ms => 42ms (tutaj zapytanie zarówno z użyciem indeksu jak i bez jest obliczane równolegle) oraz liczby logicznych odczytów z 49k do 8sztuk. Obserwujemy tak spektakularną poprawę z powodu tego, że indeksy columnstore są zoorientowane na kolumnach, przez co są niezwykle efektywne w operacjach agregujących (group by).
 
-#### Wymuszenie użycia indeksu
+#### Wymuszenie użycia indeksu, kiedy nie jest to opłacalne
 ```sql
 SELECT * FROM AccountingDocuments WITH (INDEX(IX_AD_Company_Year))
 WHERE CompanyCode = 'PL01';
 ```
+##### Bez użycia indeksu
+![alt text](image-44.png)
+![alt text](image-45.png)
+##### Z użyciem indeksu
+![alt text](image-41.png)
+![alt text](image-42.png)
+![alt text](image-43.png)
 
-#### Dodatkowa pułapka
-```sql
-SELECT * FROM AccountingDocuments
-WHERE CompanyCode = 'PL01' OR Currency = 'USD';
-```
-Jak ją obejść ???
-> Wyniki: 
+W tej sytuacji można zaobserwować dlaczego optymalizator zdecydował się nie użyć 1 indeksu w drugim podpunkcie. Operacja `KEY-Lookup` (przyłączenia do wyników kolumn, które nie znajdują się w indeksue) jest tak kosztowna, że gdy w wyniku zapytania jest wiele rekordów to może bardzo podnieść koszt zapytania 2.7 => 340, co z tym idzie czas również.
 
-```sql
---  ...
-```
 
 |         |     |     |
 | ------- | --- | --- |

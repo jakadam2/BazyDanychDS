@@ -482,6 +482,10 @@ SELECT * FROM AccountingDocuments
 WHERE YEAR(PostingDate) = 2024 AND MONTH(PostingDate) = 1;
 ```
 ![alt text](image-17.png)
+
+##### Wyniki z Database Engine Tuning Advisor
+![alt text](engine1.png)
+
 ##### Opis i wnioski
 
 Jak można zauważyć w przypadku, w którym indeks klastrowany nie był założony nastąpiła pełne i równoległe skanowanie całej tabeli(operacji `table scan` - skanowanie, `gathering stream` - zrównoleglenie), które z racji jej rozmiaru wygenerowało ok 50k operacji odczytu logicznego, miało bardzo wysoki koszt 39,8  oraz trwało 400ms, co jest bardzo dużą wartością dla takiego prostego zapytanie. Stało się tak dlatego, że aby znaleźć wszystkie rekordy spełniające warunek klauzuli `WHERE` trzeba było sprawdzić warunek dla każdego pojedynczego rekordu. Po założeniu indeksu klastrowego można zaobserwować znaczący spadek ilości logicznych odczytów (45k => 1.5k), kosztu zapytania (39.8 => 1.32) oraz czasu trwania (400ms => 147ms, ale tu nie było nic zrównoleglane CPU time ok 9x mniejszy). Operacje zrównoleglonego pełnego skanowania zastąpiono operacją wyszukiwania po indeksu (`INDEX SEEK`), z racji, że to jest indeks klastrowany pomimo wybierania wszystkich kolumn (indeks jest założony tylko na jednej) nie ma tu operacji `RID-lookup` ponieważ  wszystkie dane fizycznie są indeksowane.
@@ -514,6 +518,10 @@ INCLUDE (Amount, Currency);
 ![alt text](image-24.png)
 ![alt text](image-25.png)
 ![alt text](image-26.png)
+
+##### Wyniki z Database Engine Tuning Advisor
+![alt text](engine2.png)
+
 ##### Opis i wnioski
 
 Analizując plany poszczególnych zapytań jako pierwszy można wysnuć wniosek, że po wdrożeniu indeksu nr1 plan zapytania pozostał dokładnie taki sam jak w przypadku, kiedy nie było żadnego indeksu. Stało się tak dlatego, że pomimo użycie w tej sytuacji może się wydawać na pierwszy rzut oka logiczne, ponieważ indeks jest założony dokładnie na tych kolumnach, które występują w klauzuli `WHERE`, ale jednak jako, że wybieramy dodatkowe 2 kolumny, których indeks nie obejmuje to po operacji `INDEX SEEK` pomimo, że jest bardzo efektywna musiałby nastąpić operacja `RID-lookup`, która jest bardzo kosztowna, kiedy jest bardzo dużo rekordów w wyników (a tak jest w tym wypadku, duża tabela i dosyć ogólny warunek), w skutek czego kompilator zdecydował, żeby nie używać tego indeksu w tym wypadku. Tak, więc w przypadku 2 pierwszych zapytań nastąpiło pełne skanowanie tabeli w celu określenie warunku klauzuli `WHERE`, co spowodowało 49k operacji logicznego odczytu, wygenerowało koszt 39,8 oraz trwało 290ms. W trzecim zapytaniu w odróżnienu od poprzednich został użyty indeks, ponieważ klauzula `INCLUDE` rozwiązała problem z operacją `RID-lookup` (nie jest ona już potrzebna, ponieważ wszystkie kolumny które wybieramy fizycznie znajdują się w indeksie), więc nastąpiła efektywna operacja `INDEX SEEK`, która pozwoliła zredukować ilość odczytów logicznych (50k => 1.5k), koszt (39,8 => 1.7) oraz nieznacznie czas (290ms => 180ms, ale tu znowu pełne skanowanie było zrównoleglone, 9 krotna różnica w CPU time).
@@ -549,6 +557,11 @@ WHERE PostingDate > '2024-01-01';
 ![alt text](image-32.png)
 ##### Po założeniu indeksu dla 2
 ![alt text](image-34.png)
+
+##### Wyniki z Database Engine Tuning Advisor
+![alt text](engine3.png)
+![alt text](engine4.png)
+
 ##### Opis i wnioski
 Pierwszym zaobserwowanym wnioskiem w przypadku indeksów warunkowych, powinien być fakt, że w przypadku braku takiego samego warunku w klazuli `WHERE` nie jest on używane. Wynika to bezpośrednio z jego budowy (w jego skład nie wchodzą wiersze wykluczone przez `WHERE`). Wtedy zarówno z jak i bez indeksu zapytanie zachowuje się tak samo, następuje pełne skanowanie tabeli z danymi, co skutkuje 50k odczytów logicznych, kosztem 41, oraz czasem wykonania 820ms. Z kolei kiedy warunek, który został użyty znajduje się w (może być też jakiś inny, jeśli jest stworzony indeks to raczej logicznie powinien) w klauzuli `WHERE` to indeks jest użyty dokładnie w ten sam sposób, jak taki bez warunków. Następuje operacja `INDEX SEEK`, co pozwala zredukować odczyty logiczne 50k => 4.3, czas się zwiekszył 820ms => 1040ms (pewnie to przez ilość wątków), oraz koszt 41 => 4.7. Trzeba też również zwrócić uwagę, na fakt, że budowa i utrzymanie takiego indeksu (zwłaszcza utrzymanie) jest tańsze niż takiego zwykłego. W tej sytuacji jest to cięzkie do zauważenia (jest ok 5% usuniętych), ale zdarzają się sytuację, gdzie jest ok20% usuniętych. 
 
@@ -570,6 +583,10 @@ ON AccountingDocuments;
 ![alt text](image-38.png)
 ![alt text](image-39.png)
 ![alt text](image-40.png)
+
+##### Wyniki z Database Engine Tuning Advisor
+![alt text](engine5.png)
+
 ##### Opis i wnioski
 Indeks `columnstore` z racji na dość mocną ingerencje samej struktury tabeli pozwolił na znaczące przyśpieszenie i zmniejszenie kosztów w porównaniu do jego braku (typowa sytuacja - pełne równoległe skanowanie), kosztu z 39 => 1.7, czasu wykonania z 193ms => 42ms (tutaj zapytanie zarówno z użyciem indeksu jak i bez jest obliczane równolegle) oraz liczby logicznych odczytów z 49k do 8sztuk. Obserwujemy tak spektakularną poprawę z powodu tego, że indeksy columnstore są zoorientowane na kolumnach, przez co są niezwykle efektywne w operacjach agregujących (group by).
 
